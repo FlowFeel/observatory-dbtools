@@ -1,0 +1,29 @@
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - bodyclose
+    - noctx
+    - exportloopref
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: github.com/FlowFeel/observatory-dbtools
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
