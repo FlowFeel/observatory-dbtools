@@ -1,0 +1,6 @@
+{
+  "fpt_count": 10,
+  "di_count": 10,
+  "missing_in_di": 0,
+  "description": "All _MDAT entries in FPT are also in DI"
+}

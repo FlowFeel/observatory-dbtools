@@ -1,0 +1,81 @@
+version: '3'
+
+vars:
+  DB_HOST: '{{.DB_HOST | default "localhost"}}'
+  DB_PORT: '{{.DB_PORT | default "3306"}}'
+  DB_NAME: '{{.DB_NAME | default "mediawiki"}}'
+  DB_USER: '{{.DB_USER | default "root"}}'
+  DB_PASS: '{{.DB_PASS | default "test"}}'
+
+tasks:
+  test:
+    desc: "Run all contract tests (needs Docker)"
+    cmds:
+      - go test -v -count=1 -timeout=300s ./pkg/...
+
+  test:update:
+    desc: "Update golden files after intentional schema change"
+    cmds:
+      - go test -v -count=1 -timeout=300s -update ./pkg/...
+
+  migrate:
+    desc: "Apply pending migrations to target DB"
+    cmds:
+      - go run ./cmd/dbtools migrate --dir=./migrations
+    env:
+      DB_HOST: '{{.DB_HOST}}'
+      DB_PORT: '{{.DB_PORT}}'
+      DB_NAME: '{{.DB_NAME}}'
+      DB_USER: '{{.DB_USER}}'
+      DB_PASS: '{{.DB_PASS}}'
+
+  drift:check:
+    desc: "Check SMW FPT vs DI drift on target DB"
+    cmds:
+      - go run ./cmd/dbtools drift --check
+    env:
+      DB_HOST: '{{.DB_HOST}}'
+      DB_PORT: '{{.DB_PORT}}'
+      DB_NAME: '{{.DB_NAME}}'
+      DB_USER: '{{.DB_USER}}'
+      DB_PASS: '{{.DB_PASS}}'
+
+  drift:fix:
+    desc: "Fix SMW FPT→DI drift (requires CONFIRM=yes)"
+    preconditions:
+      - sh: '[ "{{.CONFIRM}}" = "yes" ]'
+        msg: "drift:fix requires CONFIRM=yes — e.g. task drift:fix CONFIRM=yes"
+    cmds:
+      - go run ./cmd/dbtools drift --fix
+    env:
+      DB_HOST: '{{.DB_HOST}}'
+      DB_PORT: '{{.DB_PORT}}'
+      DB_NAME: '{{.DB_NAME}}'
+      DB_USER: '{{.DB_USER}}'
+      DB_PASS: '{{.DB_PASS}}'
+
+  snapshot:
+    desc: "Capture current schema to baselines/"
+    cmds:
+      - go run ./cmd/dbtools snapshot --output=./baselines/$(date +%Y-%m-%d)_schema.sql
+    env:
+      DB_HOST: '{{.DB_HOST}}'
+      DB_PORT: '{{.DB_PORT}}'
+      DB_NAME: '{{.DB_NAME}}'
+      DB_USER: '{{.DB_USER}}'
+      DB_PASS: '{{.DB_PASS}}'
+
+  lint:
+    desc: "Run linters"
+    cmds:
+      - golangci-lint run ./...
+
+  build:
+    desc: "Build Docker image"
+    cmds:
+      - docker build -t observatory-dbtools .
+
+  default:
+    desc: "Show available tasks"
+    cmds:
+      - task --list-all

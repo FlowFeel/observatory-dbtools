@@ -1,0 +1,6 @@
+{
+  "fpt_count": 10,
+  "di_count": 7,
+  "missing_in_di": 3,
+  "description": "3 _MDAT entries in FPT not mirrored to DI"
+}
