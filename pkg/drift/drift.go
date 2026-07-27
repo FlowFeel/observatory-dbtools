@@ -4,7 +4,6 @@ package drift
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 )
 
@@ -28,11 +27,6 @@ func (r Report) String() string {
 			r.MissingInDI, r.FPTCount, r.DICount)
 	}
 	return fmt.Sprintf("No drift. FPT: %d, DI: %d", r.FPTCount, r.DICount)
-}
-
-// JSON returns the report as indented JSON.
-func (r Report) JSON() ([]byte, error) {
-	return json.MarshalIndent(r, "", "  ")
 }
 
 // Check compares smw_fpt_mdat against smw_di_time for _MDAT (p_id=29) drift.

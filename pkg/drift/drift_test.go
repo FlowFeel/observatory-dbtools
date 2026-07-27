@@ -11,6 +11,7 @@ import (
 
 	"github.com/FlowFeel/observatory-dbtools/pkg/connect"
 	"github.com/FlowFeel/observatory-dbtools/pkg/drift"
+	"github.com/FlowFeel/observatory-dbtools/pkg/report"
 	"github.com/google/go-cmp/cmp"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 )
@@ -95,15 +96,18 @@ func readGolden(t *testing.T, name string) drift.Report {
 func writeGolden(t *testing.T, name string, r *drift.Report) {
 	t.Helper()
 	path := filepath.Join("testdata", name)
-	data, err := r.JSON()
-	if err != nil {
-		t.Fatalf("marshal golden: %v", err)
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
-		t.Fatalf("write golden %s: %v", path, err)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create golden %s: %v", path, err)
+	}
+	defer f.Close()
+
+	fmt := report.NewFormatter(f)
+	if err := fmt.WriteJSON(r); err != nil {
+		t.Fatalf("marshal golden: %v", err)
 	}
 	t.Logf("updated golden file: %s", path)
 }
