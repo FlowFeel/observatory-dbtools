@@ -30,7 +30,11 @@ func (r *Runner) Up() error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func() {
+		srcErr, dbErr := m.Close()
+		_ = srcErr
+		_ = dbErr
+	}()
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migrate: up: %w", err)
@@ -44,7 +48,11 @@ func (r *Runner) Down() error {
 	if err != nil {
 		return err
 	}
-	defer m.Close()
+	defer func() {
+		srcErr, dbErr := m.Close()
+		_ = srcErr
+		_ = dbErr
+	}()
 
 	if err := m.Down(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migrate: down: %w", err)

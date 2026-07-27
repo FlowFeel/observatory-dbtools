@@ -68,10 +68,22 @@ func TestMigrate_UpAndDown(t *testing.T) {
 		t.Fatalf("Runner.Up failed: %v", err)
 	}
 
-	// Verify schema migration tracking table exists
+	// Verify schema migration tracking table exists using a fresh connection
+	dbVerify, err := connect.Open(connect.Config{
+		Host:     host,
+		Port:     port.Port(),
+		User:     "root",
+		Password: "test",
+		Database: "mediawiki",
+	})
+	if err != nil {
+		t.Fatalf("connect verify: %v", err)
+	}
+	defer dbVerify.Close()
+
 	var version int
 	var dirty bool
-	err = db.QueryRow("SELECT version, dirty FROM schema_migrations").Scan(&version, &dirty)
+	err = dbVerify.QueryRow("SELECT version, dirty FROM schema_migrations").Scan(&version, &dirty)
 	if err != nil {
 		t.Fatalf("query schema_migrations: %v", err)
 	}
@@ -79,7 +91,8 @@ func TestMigrate_UpAndDown(t *testing.T) {
 		t.Errorf("expected version 1 (clean), got version %d (dirty: %t)", version, dirty)
 	}
 
-	if err := runner.Down(); err != nil {
+	runnerDown := migrate.NewRunner(dbVerify, migrationsDir)
+	if err := runnerDown.Down(); err != nil {
 		t.Fatalf("Runner.Down failed: %v", err)
 	}
 }
