@@ -15,9 +15,9 @@ import (
 )
 
 type bddSuite struct {
-	container *mysql.MySQLContainer
-	db        *sql.DB
-	driftRep  *drift.Report
+	container  *mysql.MySQLContainer
+	db         *sql.DB
+	driftRep   *drift.Report
 	fixedCount int64
 }
 
