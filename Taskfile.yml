@@ -54,6 +54,18 @@ tasks:
       DB_USER: '{{.DB_USER}}'
       DB_PASS: '{{.DB_PASS}}'
 
+  search:check:
+    desc: "Audit Elasticsearch search index health vs MySQL"
+    cmds:
+      - go run ./cmd/dbtools search --check
+    env:
+      DB_HOST: '{{.DB_HOST}}'
+      DB_PORT: '{{.DB_PORT}}'
+      DB_NAME: '{{.DB_NAME}}'
+      DB_USER: '{{.DB_USER}}'
+      DB_PASS: '{{.DB_PASS}}'
+      ES_HOST: '{{.ES_HOST | default "http://localhost:9200"}}'
+
   snapshot:
     desc: "Capture current schema to baselines/"
     cmds:
