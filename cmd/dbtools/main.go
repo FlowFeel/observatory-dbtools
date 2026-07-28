@@ -10,6 +10,7 @@ import (
 	"github.com/FlowFeel/observatory-dbtools/pkg/connect"
 	"github.com/FlowFeel/observatory-dbtools/pkg/drift"
 	"github.com/FlowFeel/observatory-dbtools/pkg/search"
+	"github.com/FlowFeel/observatory-dbtools/pkg/snapshot"
 )
 
 func envOrDefault(key, fallback string) string {
@@ -148,6 +149,31 @@ func cmdSearch(args []string) {
 	}
 }
 
+func cmdSnapshot(args []string) {
+	fs := flag.NewFlagSet("snapshot", flag.ExitOnError)
+	output := fs.String("output", "", "Output path for schema dump file")
+	fs.Parse(args)
+
+	if *output == "" {
+		fmt.Fprintln(os.Stderr, "snapshot: --output is required")
+		os.Exit(1)
+	}
+
+	db, dbName, err := openDB()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "snapshot: connect error: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := snapshot.DumpExport(db, dbName, *output); err != nil {
+		fmt.Fprintf(os.Stderr, "snapshot: export error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ Database schema snapshot captured to %s\n", *output)
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("observatory-dbtools — contract-driven database tooling")
@@ -174,7 +200,7 @@ func main() {
 	case "search":
 		cmdSearch(os.Args[2:])
 	case "snapshot":
-		fmt.Println("snapshot: not yet implemented")
+		cmdSnapshot(os.Args[2:])
 	case "compare":
 		fmt.Println("compare: not yet implemented")
 	default:
