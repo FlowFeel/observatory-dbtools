@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/FlowFeel/observatory-dbtools/pkg/asset"
 	"github.com/FlowFeel/observatory-dbtools/pkg/baseline"
 	"github.com/FlowFeel/observatory-dbtools/pkg/connect"
+	"github.com/FlowFeel/observatory-dbtools/pkg/curate"
 	"github.com/FlowFeel/observatory-dbtools/pkg/drift"
 	"github.com/FlowFeel/observatory-dbtools/pkg/search"
 	"github.com/FlowFeel/observatory-dbtools/pkg/snapshot"
@@ -78,6 +80,79 @@ func cmdBaseline(args []string) {
 		os.Exit(1)
 	}
 	fmt.Println("✓ Baseline verified")
+}
+
+func cmdAsset(args []string) {
+	fs := flag.NewFlagSet("asset", flag.ExitOnError)
+	auditFlag := fs.Bool("audit", false, "Audit database for hardcoded host URLs and missing assets")
+	remediateFlag := fs.Bool("remediate-urls", false, "Rewrite hardcoded host URLs in wikitext to canonical filenames")
+	dryRunFlag := fs.Bool("dry-run", false, "Simulate URL remediation without writing changes")
+	fs.Parse(args)
+
+	if !*auditFlag && !*remediateFlag {
+		fmt.Fprintln(os.Stderr, "asset: --audit or --remediate-urls is required")
+		os.Exit(1)
+	}
+
+	db, _, err := openDB()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "asset: connect error: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if *auditFlag {
+		rpt, err := asset.AuditDatabase(db)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "asset: audit error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(rpt.String())
+		if rpt.HasViolations() {
+			os.Exit(2)
+		}
+	}
+
+	if *remediateFlag {
+		count, err := asset.RemediateDatabase(db, *dryRunFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "asset: remediation error: %v\n", err)
+			os.Exit(1)
+		}
+		if *dryRunFlag {
+			fmt.Printf("✓ [Dry Run] Would remediate %d text records with hardcoded URLs\n", count)
+		} else {
+			fmt.Printf("✓ Remediated %d text records with canonical filenames\n", count)
+		}
+	}
+}
+
+func cmdCurate(args []string) {
+	fs := flag.NewFlagSet("curate", flag.ExitOnError)
+	tier := fs.String("tier", "test", "Dataset tier to curate: test, stage, or prod")
+	verifyFlag := fs.Bool("verify", false, "Verify target database satisfies tier plan")
+	fs.Parse(args)
+
+	plan, err := curate.NewPlan(*tier)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "curate: plan error: %v\n", err)
+		os.Exit(1)
+	}
+
+	db, _, err := openDB()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "curate: connect error: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if *verifyFlag {
+		if err := curate.VerifyDatabase(db, plan); err != nil {
+			fmt.Fprintf(os.Stderr, "curate: tier verification failed: %v\n", err)
+			os.Exit(2)
+		}
+		fmt.Printf("✓ Database satisfies tier %q curation contracts (%d portal pages verified)\n", *tier, len(plan.RequiredPages))
+	}
 }
 
 func cmdDrift(args []string) {
@@ -180,10 +255,12 @@ func main() {
 		fmt.Println()
 		fmt.Println("Commands:")
 		fmt.Println("  baseline  Import schema + seed into target DB")
-		fmt.Println("  migrate   Apply/rollback SQL migrations")
+		fmt.Println("  asset     Audit and remediate hardcoded asset URLs in database")
+		fmt.Println("  curate    Validate dataset curation requirements for tier (test, stage, prod)")
 		fmt.Println("  drift     Check or fix SMW FPT↔DI drift")
 		fmt.Println("  search    Audit search index document counts vs MySQL")
 		fmt.Println("  snapshot  Dump current schema to file")
+		fmt.Println("  migrate   Apply/rollback SQL migrations")
 		fmt.Println("  compare   Diff two schema states")
 		fmt.Println()
 		fmt.Println("Use 'task --list' for the go-task interface.")
@@ -193,14 +270,18 @@ func main() {
 	switch os.Args[1] {
 	case "baseline":
 		cmdBaseline(os.Args[2:])
-	case "migrate":
-		fmt.Println("migrate: not yet implemented")
+	case "asset":
+		cmdAsset(os.Args[2:])
+	case "curate":
+		cmdCurate(os.Args[2:])
 	case "drift":
 		cmdDrift(os.Args[2:])
 	case "search":
 		cmdSearch(os.Args[2:])
 	case "snapshot":
 		cmdSnapshot(os.Args[2:])
+	case "migrate":
+		fmt.Println("migrate: not yet implemented")
 	case "compare":
 		fmt.Println("compare: not yet implemented")
 	default:
