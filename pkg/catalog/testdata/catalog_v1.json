@@ -1,0 +1,810 @@
+{
+    "version": 1,
+    "properties": [
+        {
+            "name": "Author",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": [
+                "Has author"
+            ]
+        },
+        {
+            "name": "Display title of",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": [
+                "Display title"
+            ]
+        },
+        {
+            "name": "Cover image",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Cover image caption",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Short description",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Biography",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Associate editor",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Guide editor",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Text author",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Date published",
+            "type": "Date",
+            "allowed": null,
+            "equivalent": "https://schema.org/datePublished",
+            "aliases": [
+                "Publication date"
+            ]
+        },
+        {
+            "name": "First published",
+            "type": "Date",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "First published etc",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Display date",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Notes by the editor",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Article headline",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Article in path",
+            "type": "Boolean",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Tags",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Tag",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Is collaborative research",
+            "type": "Boolean",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Has queries page",
+            "type": "Boolean",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "License URL",
+            "type": "URL",
+            "allowed": null,
+            "equivalent": "https://schema.org/license",
+            "aliases": [
+                "License"
+            ]
+        },
+        {
+            "name": "License short",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Media credits URL",
+            "type": "URL",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Media credits text",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Other text",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event name",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": "https://schema.org/name",
+            "aliases": [
+                "Name"
+            ]
+        },
+        {
+            "name": "Event type",
+            "type": "Text",
+            "allowed": [
+                "In-Person",
+                "Virtual",
+                "Hybrid"
+            ],
+            "equivalent": "https://schema.org/eventAttendanceMode",
+            "aliases": [
+                "Type",
+                "Attendance mode"
+            ]
+        },
+        {
+            "name": "Event description",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": "https://schema.org/description",
+            "aliases": [
+                "Description"
+            ]
+        },
+        {
+            "name": "Event location",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": "https://schema.org/location",
+            "aliases": [
+                "Location",
+                "Venue"
+            ]
+        },
+        {
+            "name": "Event area",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event category",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Country",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event link URL",
+            "type": "URL",
+            "allowed": null,
+            "equivalent": "https://schema.org/url",
+            "aliases": [
+                "Link URL",
+                "URL"
+            ]
+        },
+        {
+            "name": "Event link text",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event image",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event key speaker",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event agenda",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event time slot",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event graph color",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Include year in display title",
+            "type": "Boolean",
+            "allowed": [
+                "Yes",
+                "No"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Organization name",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Participant type",
+            "type": "Text",
+            "allowed": [
+                "Organization",
+                "Person"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Participant role",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Participant site",
+            "type": "URL",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Participant info",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Resource name",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Source name",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Access",
+            "type": "Text",
+            "allowed": [
+                "Open",
+                "Paid",
+                "Freemium"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Amount",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Cost",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Degree level",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Duration",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Eligibility",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Instructor",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Institution",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Level",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Number of videos",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Open access",
+            "type": "Boolean",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Area",
+            "type": "Text",
+            "allowed": [
+                "Art",
+                "Animals",
+                "Classics",
+                "Dig Labs",
+                "Economy",
+                "Education",
+                "Energy",
+                "Environment",
+                "History",
+                "Human Bridges",
+                "Living",
+                "Museums",
+                "Nature",
+                "Science"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Area banner background",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Area card image",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Path area",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Has map label",
+            "type": "Boolean",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Has photo",
+            "type": "Boolean",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Resource type",
+            "type": "Text",
+            "allowed": [
+                "Scholarship",
+                "Recorded Course",
+                "Video Playlist",
+                "Lecture Series",
+                "Educational Website",
+                "Field School",
+                "Degree Program",
+                "Internship",
+                "Fellowship",
+                "Grant"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Source type",
+            "type": "Text",
+            "allowed": [
+                "News Publisher",
+                "Journal",
+                "Magazine",
+                "Podcast",
+                "YouTube Channel",
+                "Substack"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Event start date",
+            "type": "Date",
+            "allowed": null,
+            "equivalent": "https://schema.org/startDate",
+            "aliases": [
+                "Event Start",
+                "Start date"
+            ]
+        },
+        {
+            "name": "Event end date",
+            "type": "Date",
+            "allowed": null,
+            "equivalent": "https://schema.org/endDate",
+            "aliases": [
+                "Event End",
+                "End date"
+            ]
+        },
+        {
+            "name": "Event duration",
+            "type": "Text",
+            "allowed": [
+                "Date range",
+                "Single day"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Year start",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Year end",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Month start",
+            "type": "Text",
+            "allowed": [
+                "January",
+                "February",
+                "March",
+                "April",
+                "May",
+                "June",
+                "July",
+                "August",
+                "September",
+                "October",
+                "November",
+                "December"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Month end",
+            "type": "Text",
+            "allowed": [
+                "January",
+                "February",
+                "March",
+                "April",
+                "May",
+                "June",
+                "July",
+                "August",
+                "September",
+                "October",
+                "November",
+                "December"
+            ],
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Day start",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Day end",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Hour start",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Minutes start",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Hour end",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Minutes end",
+            "type": "Number",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Campaign",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        },
+        {
+            "name": "Campaign ID",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": [
+                "CampaignID"
+            ]
+        },
+        {
+            "name": "Campaign Name",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": [
+                "Campaign name"
+            ]
+        },
+        {
+            "name": "Show on",
+            "type": "Text",
+            "allowed": null,
+            "equivalent": null,
+            "aliases": []
+        }
+    ],
+    "entities": [
+        {
+            "name": "Area",
+            "gloss": "A taxonomic boundary \u2014 classifies content into thematic domains by subject matter.",
+            "properties": [
+                "Area",
+                "Area banner background",
+                "Area card image",
+                "Path area",
+                "Has map label",
+                "Has photo"
+            ]
+        },
+        {
+            "name": "Article",
+            "gloss": "An authored discourse \u2014 carries authored content with provenance, attribution, and presentational structure.",
+            "properties": [
+                "Author",
+                "Display title of",
+                "Cover image",
+                "Cover image caption",
+                "Short description",
+                "Biography",
+                "Associate editor",
+                "Guide editor",
+                "Text author",
+                "Date published",
+                "First published",
+                "First published etc",
+                "Display date",
+                "Notes by the editor",
+                "Article headline",
+                "Article in path",
+                "Tags",
+                "Tag",
+                "Is collaborative research",
+                "Has queries page",
+                "License URL",
+                "License short",
+                "Media credits URL",
+                "Media credits text",
+                "Other text",
+                "Area"
+            ]
+        },
+        {
+            "name": "Campaign",
+            "gloss": "A teleological initiative \u2014 exists to drive an action with a purpose and an outcome.",
+            "properties": [
+                "Campaign",
+                "Campaign ID",
+                "Campaign Name",
+                "Show on"
+            ]
+        },
+        {
+            "name": "Event",
+            "gloss": "A temporal occurrence \u2014 has temporal extension, occupies a location, and is attended by participants.",
+            "properties": [
+                "Event name",
+                "Event type",
+                "Event description",
+                "Event start date",
+                "Event end date",
+                "Event duration",
+                "Event location",
+                "Event area",
+                "Event category",
+                "Country",
+                "Event link URL",
+                "Event link text",
+                "Event image",
+                "Event key speaker",
+                "Event agenda",
+                "Event time slot",
+                "Event graph color",
+                "Include year in display title",
+                "Year start",
+                "Year end",
+                "Month start",
+                "Month end",
+                "Day start",
+                "Day end",
+                "Hour start",
+                "Minutes start",
+                "Hour end",
+                "Minutes end",
+                "Organization name",
+                "Participant type",
+                "Participant role",
+                "Participant site",
+                "Participant info"
+            ]
+        },
+        {
+            "name": "Resource",
+            "gloss": "A referential entity \u2014 designates an external resource via locators and citation anchors.",
+            "properties": [
+                "Resource type",
+                "Source type",
+                "Resource name",
+                "Source name",
+                "Access",
+                "Amount",
+                "Cost",
+                "Degree level",
+                "Duration",
+                "Eligibility",
+                "Instructor",
+                "Institution",
+                "Level",
+                "Number of videos",
+                "Open access",
+                "Area"
+            ]
+        }
+    ]
+}
