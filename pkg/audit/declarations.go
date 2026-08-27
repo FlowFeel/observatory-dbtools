@@ -28,7 +28,7 @@ func AuditDeclarations(db *sql.DB, c *catalog.Catalog) (*Report, error) {
 		err := db.QueryRow(`
 			SELECT smw_id FROM smw_object_ids
 			WHERE smw_namespace = 102 AND smw_title = ?
-		`, prop.Name).Scan(&pID)
+		`, catalog.SMWTitle(prop.Name)).Scan(&pID)
 
 		if err == sql.ErrNoRows {
 			// Check if a page exists but hasn't been parsed into SMW yet.

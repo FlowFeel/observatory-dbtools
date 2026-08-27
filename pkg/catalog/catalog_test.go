@@ -121,6 +121,20 @@ func TestReadOnlyNoMutation(t *testing.T) {
 	_ = c.Entities
 }
 
+func TestSMWTitle(t *testing.T) {
+	cases := map[string]string{
+		"Event type":       "Event_type",
+		"Author":           "Author",
+		"Event start date": "Event_start_date",
+		"NoSpaces":         "NoSpaces",
+	}
+	for in, want := range cases {
+		if got := catalog.SMWTitle(in); got != want {
+			t.Errorf("SMWTitle(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func readFixture(t *testing.T, name string) ([]byte, error) {
 	t.Helper()
 	return readFileBytes(filepath.Join("testdata", filepath.Base(name)))

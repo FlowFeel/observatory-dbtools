@@ -38,7 +38,7 @@ func AuditValueTypes(db *sql.DB, c *catalog.Catalog, opts AuditOptions) (*Report
 		err := db.QueryRow(`
 			SELECT smw_id FROM smw_object_ids
 			WHERE smw_namespace = 102 AND smw_title = ?
-		`, prop.Name).Scan(&pID)
+		`, catalog.SMWTitle(prop.Name)).Scan(&pID)
 		if err == sql.ErrNoRows {
 			continue // property not in DB — Contract 1 will report this
 		}

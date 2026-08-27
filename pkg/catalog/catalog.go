@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // CurrentVersion is the supported major version of the catalog artifact.
@@ -128,6 +129,15 @@ func (c *Catalog) PropertyNames() []string {
 		names = append(names, c.Properties[i].Name)
 	}
 	return names
+}
+
+// SMWTitle returns the canonical SMW storage title for a property name.
+// SMW stores property page titles in smw_object_ids with underscores
+// instead of spaces (e.g. "Event type" → "Event_type"). Both the audit
+// queries and the BDD seeds must use this canonical form to avoid the
+// divergent-parsing-semantics anti-pattern.
+func SMWTitle(name string) string {
+	return strings.ReplaceAll(name, " ", "_")
 }
 
 // EntityByName returns the entity definition for a name, or nil when absent.
