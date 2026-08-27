@@ -181,20 +181,75 @@ declared `PropertyType`.
 
 ### Contract 3: Value-Range Consistency and Historical Invariants
 
-Contract 3 audits historical values against domain invariants. Natural language
-gloss: a semantic audit verifying that all persisted literal values conform to
-range restrictions and syntactic formatting constraints.
+Contract 3 establishes an axiomatic verification pipeline that audits persisted
+relational data items against the formal invariant rules declared in the compiled
+catalog. While the real-time edit filtering gate prevents invalid assertions from
+entering the database during active page saves, Contract 3 operates retroactively
+across historical data. It audits the existing MySQL database to uncover data
+corruption, schema drift, incomplete bulk imports, and legacy wikitext anomalies
+that predate the deployment of the semantic compiler.
 
-**Set-Theoretic Range Verification:** Inspects discrete literal values stored in
-`smw_di_blob` or `smw_di_wikipage` and asserts membership within the declared
-`AllowedValues` set.
+#### Invariant Evaluation Topologies
 
-**Syntactic Scalar Validation:** Verifies that date strings in `smw_di_time`
-adhere to standardized ISO temporal specifications and that URI strings in
-`smw_di_uri` conform to absolute web addresses.
+The Go audit engine evaluates data items across three distinct ontological
+categories:
 
-**Catching Legacy Data:** Identifies corrupt or non-standard assertions that
-were committed before the introduction of real-time edit-filtering hooks.
+**Discrete Set Membership Invariants:** Evaluates literals associated with
+properties carrying an active `AllowedValues` declaration. Natural language
+gloss: a set-theoretic verification confirming that an instantiated string value
+belongs to the explicit list of permissible symbolic tokens. For properties
+stored in `smw_di_blob` (such as attendance modes, currency codes, or
+operational status tokens), the auditor checks that the trimmed literal exists
+within the catalog property's declared enumeration set.
+
+**Scalar Syntactic Invariants:** Evaluates literals against standardized
+syntactic specifications native to their declared `PropertyType`. Natural
+language gloss: an algorithmic rule confirming that a serialized string conforms
+to formal syntax standards such as ISO calendar formats or uniform resource
+locators. For temporal properties in `smw_di_time`, the auditor confirms that
+the serialized date string parses cleanly as a valid historical, current, or
+future timestamp without date overflow. For network locators in `smw_di_uri`,
+the auditor confirms that the stored string matches absolute URI specifications
+with valid scheme prefixes.
+
+**Relational Reference Invariants:** Evaluates foreign key pointers stored in
+`smw_di_wikipage`. Natural language gloss: a relational integrity verification
+confirming that an edge pointer resolves to an existing, valid subject entity.
+For properties connecting two entities (such as event organizers or venues), the
+auditor verifies that the target object identifier points to an active,
+non-deleted entry in `smw_object_ids`.
+
+#### The Streaming Cursor Execution Architecture
+
+Auditing millions of relational rows across multi-gigabyte production databases
+requires a strictly bounded memory footprint. The audit engine uses
+deterministic keyset pagination to stream records:
+
+**Keyset Streaming over Composite Primary Keys:** Rather than executing
+offset-based queries, the auditor pages through data item tables using strictly
+ascending inequality filters on the composite primary keys: where the subject
+identifier is greater than the last processed identifier, ordered by the subject
+identifier ascending with a bounded batch limit. Natural language gloss: a
+high-performance database querying strategy that reads sequential chunks of rows
+using indexed keys rather than costly table-skipping offsets.
+
+**Property-Targeted Query Dispatch:** Rather than scanning an entire table
+indiscriminately, the auditor groups catalog properties by their physical
+storage table and constructs focused batch queries targeting only the property
+identifiers (`p_id`) declared in that batch.
+
+**Constant-Memory Diagnostics Accumulation:** The auditor processes each batch
+in a single pass, updating rolling statistical counters and recording distinct
+diagnostic violation structures before releasing the row data to the garbage
+collector.
+
+#### Anti-Patterns to Eliminate in Contract 3
+
+**The Unbounded Scan Antipattern:** Natural language gloss: the catastrophic
+practice of executing unindexed, full-table queries into application memory.
+Fetching raw database dumps or unbounded result sets causes out-of-memory crashes
+on large installations. The auditor must strictly enforce cursor-based batch
+streaming across all data-item audits.
 
 ---
 
