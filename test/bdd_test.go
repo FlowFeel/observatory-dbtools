@@ -3,7 +3,9 @@ package test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,6 +31,10 @@ type bddSuite struct {
 	valueTypeRep   *audit.Report
 	valueRangeRep  *audit.Report
 	pIDByProperty  map[string]int
+
+	// projection discipline state (T-541)
+	disciplineData   []byte
+	disciplineReport *catalog.Report
 }
 
 // propertyPageNS is the MediaWiki namespace for Property pages.
@@ -633,6 +639,157 @@ func (s *bddSuite) stepErrIsNil(err error) error {
 	return err
 }
 
+// ---------------------------------------------------------------------------
+// T-541 projection discipline BDD steps — spec is the code
+//
+// These scenarios enforce the projection line: catalog.json carries declared
+// facts only; derivation and negotiation live in consumers. The steps are
+// pure-Go (no DB) — they run inside the shared testcontainers suite in CI.
+// ---------------------------------------------------------------------------
+
+func (s *bddSuite) aCatalogArtifactWithVersion(version int) error {
+	data, err := os.ReadFile(filepath.Join("..", "pkg", "catalog", "testdata", "catalog_v1.json"))
+	if err != nil {
+		return fmt.Errorf("read fixture: %w", err)
+	}
+	var head struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return err
+	}
+	if head.Version != version {
+		return fmt.Errorf("fixture version %d, want %d", head.Version, version)
+	}
+	s.disciplineData = data
+	return nil
+}
+
+func (s *bddSuite) theDisciplineInspectionMustPass() error {
+	if len(s.disciplineData) == 0 {
+		return fmt.Errorf("no artifact loaded")
+	}
+	rep, err := catalog.Inspect(s.disciplineData)
+	if err != nil {
+		return fmt.Errorf("inspect: %w", err)
+	}
+	s.disciplineReport = rep
+	if len(rep.Violations) > 0 {
+		return fmt.Errorf("discipline inspection failed: %+v", rep.Violations)
+	}
+	return nil
+}
+
+func (s *bddSuite) theArtifactMustNotCarryAnyDerivedField() error {
+	for _, v := range s.disciplineReport.Violations {
+		if v.Rule == catalog.RuleDerivedField {
+			return fmt.Errorf("derived field present: %+v", v)
+		}
+	}
+	return nil
+}
+
+func (s *bddSuite) theSemanticNestingDepthMustNotExceedTheEntryLevel() error {
+	for _, v := range s.disciplineReport.Violations {
+		if v.Rule == catalog.RuleNestingDepth {
+			return fmt.Errorf("nesting violation: %+v", v)
+		}
+	}
+	return nil
+}
+
+// hostileArtifact builds a hostile catalog.json from the fixture by
+// replacing the first occurrence of marker with replacement.
+func (s *bddSuite) hostileArtifact(marker, replacement string) error {
+	data := string(s.disciplineData)
+	idx := strings.Index(data, marker)
+	if idx < 0 {
+		return fmt.Errorf("marker %q not found in fixture", marker)
+	}
+	s.disciplineData = []byte(data[:idx] + replacement + data[idx+len(marker):])
+	return nil
+}
+
+func (s *bddSuite) aCatalogArtifactCarryingTheDerivedFieldOnAPropertyEntry(field string) error {
+	return s.hostileArtifact(`"type": "Text"`, `"type": "Text", "`+field+`": "smw_di_time"`)
+}
+
+func (s *bddSuite) theDisciplineInspectionMustReportADerivedFieldViolation() error {
+	rep, err := catalog.Inspect(s.disciplineData)
+	if err != nil {
+		return err
+	}
+	s.disciplineReport = rep
+	for _, v := range rep.Violations {
+		if v.Rule == catalog.RuleDerivedField {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected derived-field violation, got: %+v", rep.Violations)
+}
+
+func (s *bddSuite) aCatalogArtifactCarryingTheUnknownTopLevelField(field string) error {
+	return s.hostileArtifact(`"version": 1`, `"version": 1, "`+field+`": {}`)
+}
+
+func (s *bddSuite) theArtifactMustStillLoadSuccessfully() error {
+	rep, err := catalog.Inspect(s.disciplineData)
+	if err != nil {
+		return fmt.Errorf("artifact failed to load: %w", err)
+	}
+	s.disciplineReport = rep
+	return nil
+}
+
+func (s *bddSuite) theInspectionMustRecordAnOpenWorldWarningNotAViolation() error {
+	if len(s.disciplineReport.Violations) > 0 {
+		return fmt.Errorf("expected no violations under OWA, got: %+v", s.disciplineReport.Violations)
+	}
+	warned := false
+	for _, w := range s.disciplineReport.Warnings {
+		if strings.Contains(w, "extensions") {
+			warned = true
+		}
+	}
+	if !warned {
+		return fmt.Errorf("expected OWA warning mentioning extensions, got: %+v", s.disciplineReport.Warnings)
+	}
+	return nil
+}
+
+func (s *bddSuite) aCatalogArtifactWhoseAllowedValuesAreNestedObjects() error {
+	return s.hostileArtifact(`"allowed": null,`, `"allowed": [{"value": "A"}],`)
+}
+
+func (s *bddSuite) theDisciplineInspectionMustReportANestingDepthViolation() error {
+	rep, err := catalog.Inspect(s.disciplineData)
+	if err != nil {
+		return err
+	}
+	s.disciplineReport = rep
+	for _, v := range rep.Violations {
+		if v.Rule == catalog.RuleNestingDepth {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected nesting-depth violation, got: %+v", rep.Violations)
+}
+
+func (s *bddSuite) aCatalogArtifactDeclaringADateProperty() error {
+	return s.hostileArtifact(`"type": "Text"`, `"type": "Date"`)
+}
+
+func (s *bddSuite) theExpectedStorageTableIsDerivedFromTheTypeAs(expected string) error {
+	got, ok := audit.ExpectedTable("Date")
+	if !ok {
+		return fmt.Errorf("Date type not routable")
+	}
+	if got != expected {
+		return fmt.Errorf("ExpectedTable(Date) = %q, want %q", got, expected)
+	}
+	return nil
+}
+
 func InitializeScenario(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^a clean baseline database is loaded$`, suite.aCleanBaselineDatabaseIsLoaded)
 	ctx.Step(`^the following core tables must exist:$`, suite.theFollowingCoreTablesMustExist)
@@ -676,6 +833,21 @@ func InitializeScenario(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^the violation diagnostic should include the declared allowed values$`, suite.theViolationDiagnosticShouldIncludeTheDeclaredAllowedValues)
 	ctx.Step(`^an audit should report a syntax violation$`, suite.anAuditShouldReportASyntaxViolation)
 	ctx.Step(`^an audit should report a reference violation$`, suite.anAuditShouldReportAReferenceViolation)
+
+	// T-541 projection discipline steps (pure-Go, no DB)
+	ctx.Step(`^a catalog artifact with version (\d+)$`, suite.aCatalogArtifactWithVersion)
+	ctx.Step(`^the discipline inspection must pass$`, suite.theDisciplineInspectionMustPass)
+	ctx.Step(`^the artifact must not carry any derived field$`, suite.theArtifactMustNotCarryAnyDerivedField)
+	ctx.Step(`^the semantic nesting depth must not exceed the entry level$`, suite.theSemanticNestingDepthMustNotExceedTheEntryLevel)
+	ctx.Step(`^a catalog artifact carrying the derived field "([^"]+)" on a property entry$`, suite.aCatalogArtifactCarryingTheDerivedFieldOnAPropertyEntry)
+	ctx.Step(`^the discipline inspection must report a derived-field violation$`, suite.theDisciplineInspectionMustReportADerivedFieldViolation)
+	ctx.Step(`^a catalog artifact carrying the unknown top-level field "([^"]+)"$`, suite.aCatalogArtifactCarryingTheUnknownTopLevelField)
+	ctx.Step(`^the artifact must still load successfully$`, suite.theArtifactMustStillLoadSuccessfully)
+	ctx.Step(`^the inspection must record an open-world warning, not a violation$`, suite.theInspectionMustRecordAnOpenWorldWarningNotAViolation)
+	ctx.Step(`^a catalog artifact whose allowed values are nested objects$`, suite.aCatalogArtifactWhoseAllowedValuesAreNestedObjects)
+	ctx.Step(`^the discipline inspection must report a nesting-depth violation$`, suite.theDisciplineInspectionMustReportANestingDepthViolation)
+	ctx.Step(`^a catalog artifact declaring a Date property$`, suite.aCatalogArtifactDeclaringADateProperty)
+	ctx.Step(`^the expected storage table is derived from the type as (\w+)$`, suite.theExpectedStorageTableIsDerivedFromTheTypeAs)
 }
 
 func TestBDDFeatures(t *testing.T) {
