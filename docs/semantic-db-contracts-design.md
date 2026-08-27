@@ -251,6 +251,57 @@ Fetching raw database dumps or unbounded result sets causes out-of-memory crashe
 on large installations. The auditor must strictly enforce cursor-based batch
 streaming across all data-item audits.
 
+**The Divergent Parsing Semantics Antipattern:** Natural language gloss: the
+introduction of subtle validation discrepancies between the PHP domain engine
+and the Go auditor. If the Go auditor uses a lenient temporal parser while PHP
+uses strict ISO 8601 formatting, or if Go normalizes whitespace differently than
+PHP, false positive or false negative audit reports will occur. Both engines
+must anchor their parsing rules in strict formal standards: exact character
+matching for allowed value enumerations, RFC 3986 for resource identifiers, and
+ISO 8601 for temporal instances.
+
+**The Premature Halting Antipattern:** Natural language gloss: terminating an
+audit process upon encountering the first invalid database value. Aborting
+execution prevents the database engineering team from discovering the full
+distribution and magnitude of data corruption. The auditor must proceed
+continuously through the entire dataset, aggregating violations into a
+comprehensive diagnostic report.
+
+**The Normalization Mismatch Antipattern:** Natural language gloss: failing to
+apply canonical string normalization before evaluating set membership. Stored
+wikitext values may contain typographical discrepancies, such as trailing
+carriage returns or leading whitespace introduced by template formatting. The Go
+auditor must normalize input strings using the exact same trimming rules applied
+by the domain value objects before asserting set membership.
+
+**The Orphaned Predicate Omission Antipattern:** Natural language gloss:
+ignoring database rows whose property identifier does not map to any recognized
+catalog declaration. When querying data item tables, rows pointing to
+unrecognized or deleted property identifiers must not be silently discarded;
+they must be captured and reported as orphaned predicates under Contract 2 or
+Contract 3 diagnostics.
+
+#### The Diagnostic Violation Model
+
+Contract 3 produces structured, graduated diagnostic reports that provide
+actionable remediation context without overwhelming log outputs:
+
+**Violation Envelope:** Each detected non-conformity is captured as an immutable
+record detailing the physical table, the subject entity title and namespace, the
+property name, the stored candidate literal, the declared rule violated, and a
+human-readable diagnostic gloss.
+
+**Graduated Aggregation:** The audit report organizes findings into three
+structural levels: a high-level summary indicating the total rows scanned, the
+error rate per property, and overall pass-fail status; an intermediate
+categorical breakdown grouping errors by constraint type; and an itemized
+violation log displaying precise database locations for remediation scripts.
+
+**Sampling Bounds:** To prevent log flooding when a property suffers widespread
+systematic corruption, the auditor caps the collection of raw individual
+violation instances at a configurable threshold per property while continuing to
+increment the global violation counter.
+
 ---
 
 ## 4. Go Architectural Subsystems in dbtools
