@@ -51,11 +51,27 @@ Author: Flow (with Ed Phil)
 **Baseline debt registered (measured starting point):** the Go derivation tables
 (`pkg/audit/validators.go` type→table, `_txt/_dat/...` codes, `catalog.SMWTitle`)
 are the negotiation logic — correct placement, but previously unproven and
-silently divergent. Phase 3 makes them total + load-time-verified.
+silently divergent. **RESOLVED by T-546:** `RoutingTotality()` now proves them total
+and free of truth-divergent entries.
 
-## Phase roadmap (agile — each phase lands as executable behaviors)
+**Divergence surfaced and fixed (T-546):** Go's routing maps carried a `Code`
+type that the PHP `PropertyType` enum never declares. That is exactly the
+silent-divergence the totality contract exists to catch — Go knew a type truth
+doesn't. Fixed by removing the dead `Code` routing; the load-time cross-check
+now rejects any artifact emitting it until PHP truth declares it.
 
-**Phase 2 — Provenance + determinism on the producer (PHP)**
+## Phase roadmap — Go first, PHP after (agile, each phase lands as executable behaviors)
+
+**Phase 8 (GO) — DONE: Prove Go owns derivation (T-546, T-547, T-548)**
+- T-546: totality contract — `RoutingTotality()`, `KnownTypes` registry, title
+  collisions. BDD: `features/derivation_totality.feature`.
+- T-547: load-time cross-check — `catalog.Parse` rejects unknown types loudly.
+  BDD: `features/load_time_cross_check.feature`.
+- T-548: exclusion contract — `IsDerivedField`, OWA-warn vs violation; producer
+  reject is PHP-side (Phase 7). BDD: `features/exclusion_contract.feature`.
+- Isolation: `TestBDDDiscipline` runs all of it without Docker.
+
+**Phase 7 (PHP) — Provenance + determinism on the producer**
 - T-543: provenance block in artifact — content hash over compiled manifests +
   compiler identity. Content-hash *only*; no timestamp (regeneration must stay
   byte-identical).
@@ -63,14 +79,6 @@ silently divergent. Phase 3 makes them total + load-time-verified.
   manifest edit → hash changes.
 - T-545: schema-shape contract (PHPUnit) — exporter emits exactly the allowed v1
   keys; nesting ≤2; flat lists; no key outside the set.
-
-**Phase 3 — Prove Go owns derivation (Go)**
-- T-546: totality contract — table-driven over every `PropertyType` case;
-  type→table, code↔type, SMWTitle derivations complete and total.
-- T-547: load-time cross-check — `catalog.Parse` fails loudly on any property
-  type with no Go derivation.
-- T-548: exclusion-contract test — fixture smuggling a derived field →
-  producer-reject + consumer-OWA-warn, both asserted.
 
 **Phase 4 — Provenance-driven retranslation (Go + CI)**
 - T-549: Go loader verifies provenance (hash present, matches pinned fixture).
