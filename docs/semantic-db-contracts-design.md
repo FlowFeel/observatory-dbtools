@@ -355,6 +355,11 @@ MySQL instances pre-loaded with valid and invalid semantic fixture sets.
 Update `pkg/curate` to consume the loaded catalog and configure `pkg/drift`
 using the topological registry pattern.
 
+### Phase 5: BDD Integration
+
+Implement Godog scenarios in `test/bdd_test.go` executing end-to-end contract
+validation against realistic MediaWiki schemas.
+
 ---
 
 ## 7. Patterns & Anti-Patterns (Design Grounding)
