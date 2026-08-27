@@ -3,6 +3,7 @@ package catalog
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ const (
 	RuleDerivedField = "derived_field_smuggled"
 	RuleNestingDepth = "nesting_depth_exceeded"
 	RuleUnknownField = "unknown_field"
+	RuleUnknownType  = "unknown_type"
 )
 
 // derivedFields are negotiation knowledge that must never cross the wire.
@@ -210,6 +212,18 @@ func walkEntry(obj map[string]any, path string, isProperty bool, rep *Report) {
 			}
 			walkScalarList(tv, child, rep)
 		default:
+			// A property's declared type is a fact the consumer must be able to
+			// decode. An unknown type is a semantic gap — diagnosed as a violation
+			// here, and a hard load failure in Parse.
+			if isProperty && k == "type" {
+				if s, ok := v.(string); ok && !KnownType(s) {
+					rep.Violations = append(rep.Violations, Violation{
+						Path: child, Field: k, Rule: RuleUnknownType,
+						Diagnostic: fmt.Sprintf("property declares unknown type %q (known: %s)", s, strings.Join(KnownTypes(), ", ")),
+					})
+				}
+				continue
+			}
 			if derivedFields[k] {
 				rep.Violations = append(rep.Violations, Violation{
 					Path: child, Field: k, Rule: RuleDerivedField,
@@ -243,4 +257,27 @@ func kindLabel(isProperty bool) string {
 		return "property"
 	}
 	return "entity"
+}
+
+// IsDerivedField reports whether name is a derived field the projection must
+// refuse to carry. Consumers derive these locally from declared facts.
+func IsDerivedField(name string) bool {
+	return derivedFields[name]
+}
+
+// TitleCollisions returns pairs of distinct property names whose SMWTitle
+// forms collide (same canonical storage title). A collision makes identity
+// ambiguous in smw_object_ids and must never silently pass.
+func (c *Catalog) TitleCollisions() [][2]string {
+	seen := map[string]string{}
+	var out [][2]string
+	for _, p := range c.Properties {
+		title := SMWTitle(p.Name)
+		if prev, ok := seen[title]; ok {
+			out = append(out, [2]string{prev, p.Name})
+		} else {
+			seen[title] = p.Name
+		}
+	}
+	return out
 }

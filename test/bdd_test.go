@@ -35,6 +35,13 @@ type bddSuite struct {
 	// projection discipline state (T-541)
 	disciplineData   []byte
 	disciplineReport *catalog.Report
+
+	// derivation totality state (T-546)
+	knownTypes []string
+	totality   []string
+
+	// load-time cross-check state (T-547)
+	lastLoadErr error
 }
 
 // propertyPageNS is the MediaWiki namespace for Property pages.
@@ -698,15 +705,21 @@ func (s *bddSuite) theSemanticNestingDepthMustNotExceedTheEntryLevel() error {
 	return nil
 }
 
-// hostileArtifact builds a hostile catalog.json from the fixture by
-// replacing the first occurrence of marker with replacement.
+// hostileArtifact builds a hostile catalog.json from the committed fixture by
+// replacing the first occurrence of marker with replacement. It always starts
+// from the pristine fixture so scenarios are independent — godog shares one
+// suite instance across scenarios and mutated state would leak.
 func (s *bddSuite) hostileArtifact(marker, replacement string) error {
-	data := string(s.disciplineData)
-	idx := strings.Index(data, marker)
+	data, err := os.ReadFile(filepath.Join("..", "pkg", "catalog", "testdata", "catalog_v1.json"))
+	if err != nil {
+		return fmt.Errorf("read fixture: %w", err)
+	}
+	text := string(data)
+	idx := strings.Index(text, marker)
 	if idx < 0 {
 		return fmt.Errorf("marker %q not found in fixture", marker)
 	}
-	s.disciplineData = []byte(data[:idx] + replacement + data[idx+len(marker):])
+	s.disciplineData = []byte(text[:idx] + replacement + text[idx+len(marker):])
 	return nil
 }
 
@@ -790,6 +803,190 @@ func (s *bddSuite) theExpectedStorageTableIsDerivedFromTheTypeAs(expected string
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// T-546 derivation totality steps
+// ---------------------------------------------------------------------------
+
+func (s *bddSuite) theCatalogKnownTypes() error {
+	s.knownTypes = catalog.KnownTypes()
+	if len(s.knownTypes) == 0 {
+		return fmt.Errorf("no known types registered")
+	}
+	return nil
+}
+
+func (s *bddSuite) totalityProblems() []string {
+	if s.totality == nil {
+		s.totality = audit.RoutingTotality()
+	}
+	return s.totality
+}
+
+func (s *bddSuite) totalityMustBeClean() error {
+	if ps := s.totalityProblems(); len(ps) > 0 {
+		return fmt.Errorf("derivation totality violated: %+v", ps)
+	}
+	return nil
+}
+
+func (s *bddSuite) everyKnownTypeMapsToAStorageTable() error {
+	return s.totalityMustBeClean()
+}
+
+func (s *bddSuite) everyKnownTypeMapsToAnSMWCode() error {
+	return s.totalityMustBeClean()
+}
+
+func (s *bddSuite) everySMWCodeDecodesBackToItsKnownType() error {
+	return s.totalityMustBeClean()
+}
+
+func (s *bddSuite) noRoutedTypeIsAbsentFromTheKnownSet() error {
+	return s.totalityMustBeClean()
+}
+
+func (s *bddSuite) theScannedDataItemTablesEqualTheRoutableTableSet() error {
+	return s.totalityMustBeClean()
+}
+
+func (s *bddSuite) aTypeOutsideTheKnownSetMustNotBeRoutable() error {
+	for _, t := range []string{"Geo", "Enum", "Widget", "Code"} {
+		if _, ok := audit.ExpectedTable(t); ok {
+			return fmt.Errorf("type %q is routable but outside PHP truth", t)
+		}
+	}
+	return nil
+}
+
+func (s *bddSuite) noTwoPropertyNamesShareAnSMWTitle() error {
+	if s.catalog == nil {
+		return fmt.Errorf("no catalog loaded")
+	}
+	if cols := s.catalog.TitleCollisions(); len(cols) > 0 {
+		return fmt.Errorf("SMWTitle collisions: %v", cols)
+	}
+	return nil
+}
+
+// aCompiledPropertyCatalogIsLoadedFromTheFixture loads the catalog without
+// touching the database — used by the DB-free discipline suite for title-
+// collision checks.
+func (s *bddSuite) aCompiledPropertyCatalogIsLoadedFromTheFixture() error {
+	c, _, err := catalog.Load(filepath.Join("..", "pkg", "catalog", "testdata", "catalog_v1.json"))
+	if err != nil {
+		return fmt.Errorf("load catalog fixture: %w", err)
+	}
+	s.catalog = c
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// T-547 load-time cross-check steps
+// ---------------------------------------------------------------------------
+
+func (s *bddSuite) aCatalogArtifactWithAPropertyOfUnknownType(unknownType string) error {
+	return s.hostileArtifact(`"type": "Text"`, `"type": "`+unknownType+`"`)
+}
+
+func (s *bddSuite) loadingTheArtifactMustFail() error {
+	_, _, err := catalog.Parse(s.disciplineData)
+	if err == nil {
+		return fmt.Errorf("expected load to fail on unknown type")
+	}
+	s.lastLoadErr = err
+	return nil
+}
+
+func (s *bddSuite) theErrorMustIdentifyThePropertyNameAndTheUnknownType() error {
+	if s.lastLoadErr == nil {
+		return fmt.Errorf("no load error captured")
+	}
+	if !strings.Contains(s.lastLoadErr.Error(), "Geo") {
+		return fmt.Errorf("error does not name the unknown type: %v", s.lastLoadErr)
+	}
+	if !strings.Contains(s.lastLoadErr.Error(), "Author") {
+		return fmt.Errorf("error does not name the property (expected Author): %v", s.lastLoadErr)
+	}
+	return nil
+}
+
+func (s *bddSuite) theDisciplineInspectionMustReportAnUnknownTypeViolation() error {
+	rep, err := catalog.Inspect(s.disciplineData)
+	if err != nil {
+		return err
+	}
+	for _, v := range rep.Violations {
+		if v.Rule == catalog.RuleUnknownType {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected unknown-type violation, got: %+v", rep.Violations)
+}
+
+func (s *bddSuite) theInspectionMustNotClassifyTheUnknownTypeAsAnOpenWorldWarning() error {
+	rep, err := catalog.Inspect(s.disciplineData)
+	if err != nil {
+		return err
+	}
+	for _, w := range rep.Warnings {
+		if strings.Contains(w, "Geo") {
+			return fmt.Errorf("unknown type surfaced as OWA warning: %v", w)
+		}
+	}
+	for _, v := range rep.Violations {
+		if v.Rule == catalog.RuleUnknownType {
+			return nil
+		}
+	}
+	return fmt.Errorf("expected unknown-type violation (not a warning): %+v", rep.Violations)
+}
+
+func (s *bddSuite) loadingTheArtifactMustSucceed() error {
+	_, _, err := catalog.Parse(s.disciplineData)
+	return err
+}
+
+// ---------------------------------------------------------------------------
+// T-548 exclusion contract steps
+// ---------------------------------------------------------------------------
+
+func (s *bddSuite) aCatalogArtifactCarryingTheDerivedFieldOnAnEntityEntry(field string) error {
+	// The entity block is pretty-printed: "name": "Area", then "gloss" on
+	// the next line (12-space indent). The gloss continuation disambiguates
+	// from the property entry of the same name.
+	marker := "\"name\": \"Area\",\n            \"gloss\""
+	replacement := "\"name\": \"Area\",\n            \"" + field + "\": \"Area\",\n            \"gloss\""
+	return s.hostileArtifact(marker, replacement)
+}
+
+func (s *bddSuite) aCatalogArtifactCarryingTheDerivedFieldAtTheTopLevel(field string) error {
+	return s.hostileArtifact(`"version": 1`, `"version": 1, "`+field+`": 999`)
+}
+
+func (s *bddSuite) theExclusionListCoversTheDerivedFields(fields string) error {
+	for _, f := range strings.Split(fields, ",") {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		if !catalog.IsDerivedField(f) {
+			return fmt.Errorf("derived field %q not covered by the exclusion list", f)
+		}
+	}
+	return nil
+}
+
+func (s *bddSuite) expectedTableStillDerivesRoutingFromTheDeclaredType() error {
+	got, ok := audit.ExpectedTable("Text")
+	if !ok {
+		return fmt.Errorf("Text type not routable")
+	}
+	if got != "smw_di_blob" {
+		return fmt.Errorf("ExpectedTable(Text) = %q, want smw_di_blob (wire field must not steer routing)", got)
+	}
+	return nil
+}
+
 func InitializeScenario(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^a clean baseline database is loaded$`, suite.aCleanBaselineDatabaseIsLoaded)
 	ctx.Step(`^the following core tables must exist:$`, suite.theFollowingCoreTablesMustExist)
@@ -834,12 +1031,23 @@ func InitializeScenario(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^an audit should report a syntax violation$`, suite.anAuditShouldReportASyntaxViolation)
 	ctx.Step(`^an audit should report a reference violation$`, suite.anAuditShouldReportAReferenceViolation)
 
-	// T-541 projection discipline steps (pure-Go, no DB)
+	// T-541+ projection discipline steps (pure-Go, no DB)
+	registerDisciplineSteps(ctx, suite)
+}
+
+// registerDisciplineSteps binds all projection-discipline scenarios — the
+// projection line, derivation totality, load-time cross-check, and exclusion
+// contract. These steps are pure Go: they never touch the database, so the
+// discipline suite runs without Docker (TestBDDDiscipline) while also running
+// inside the full container suite (TestBDDFeatures).
+func registerDisciplineSteps(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^a catalog artifact with version (\d+)$`, suite.aCatalogArtifactWithVersion)
 	ctx.Step(`^the discipline inspection must pass$`, suite.theDisciplineInspectionMustPass)
 	ctx.Step(`^the artifact must not carry any derived field$`, suite.theArtifactMustNotCarryAnyDerivedField)
 	ctx.Step(`^the semantic nesting depth must not exceed the entry level$`, suite.theSemanticNestingDepthMustNotExceedTheEntryLevel)
 	ctx.Step(`^a catalog artifact carrying the derived field "([^"]+)" on a property entry$`, suite.aCatalogArtifactCarryingTheDerivedFieldOnAPropertyEntry)
+	ctx.Step(`^a catalog artifact carrying the derived field "([^"]+)" on an entity entry$`, suite.aCatalogArtifactCarryingTheDerivedFieldOnAnEntityEntry)
+	ctx.Step(`^a catalog artifact carrying the derived field "([^"]+)" at the top level$`, suite.aCatalogArtifactCarryingTheDerivedFieldAtTheTopLevel)
 	ctx.Step(`^the discipline inspection must report a derived-field violation$`, suite.theDisciplineInspectionMustReportADerivedFieldViolation)
 	ctx.Step(`^a catalog artifact carrying the unknown top-level field "([^"]+)"$`, suite.aCatalogArtifactCarryingTheUnknownTopLevelField)
 	ctx.Step(`^the artifact must still load successfully$`, suite.theArtifactMustStillLoadSuccessfully)
@@ -848,6 +1056,31 @@ func InitializeScenario(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^the discipline inspection must report a nesting-depth violation$`, suite.theDisciplineInspectionMustReportANestingDepthViolation)
 	ctx.Step(`^a catalog artifact declaring a Date property$`, suite.aCatalogArtifactDeclaringADateProperty)
 	ctx.Step(`^the expected storage table is derived from the type as (\w+)$`, suite.theExpectedStorageTableIsDerivedFromTheTypeAs)
+
+	// T-546 derivation totality
+	ctx.Step(`^the catalog known types$`, suite.theCatalogKnownTypes)
+	ctx.Step(`^every known type maps to a storage table$`, suite.everyKnownTypeMapsToAStorageTable)
+	ctx.Step(`^every known type maps to an SMW code$`, suite.everyKnownTypeMapsToAnSMWCode)
+	ctx.Step(`^every SMW code decodes back to its known type$`, suite.everySMWCodeDecodesBackToItsKnownType)
+	ctx.Step(`^no routed type is absent from the known set$`, suite.noRoutedTypeIsAbsentFromTheKnownSet)
+	ctx.Step(`^the scanned data-item tables equal the routable table set$`, suite.theScannedDataItemTablesEqualTheRoutableTableSet)
+	ctx.Step(`^a type outside the known set must not be routable$`, suite.aTypeOutsideTheKnownSetMustNotBeRoutable)
+
+	// T-546 title collisions (needs the fixture catalog, no DB)
+	ctx.Step(`^a compiled property catalog is loaded from the fixture$`, suite.aCompiledPropertyCatalogIsLoadedFromTheFixture)
+	ctx.Step(`^no two property names share an SMWTitle$`, suite.noTwoPropertyNamesShareAnSMWTitle)
+
+	// T-547 load-time cross-check
+	ctx.Step(`^a catalog artifact with a property of unknown type "([^"]+)"$`, suite.aCatalogArtifactWithAPropertyOfUnknownType)
+	ctx.Step(`^loading the artifact must fail$`, suite.loadingTheArtifactMustFail)
+	ctx.Step(`^the error must identify the property name and the unknown type$`, suite.theErrorMustIdentifyThePropertyNameAndTheUnknownType)
+	ctx.Step(`^the discipline inspection must report an unknown-type violation$`, suite.theDisciplineInspectionMustReportAnUnknownTypeViolation)
+	ctx.Step(`^the inspection must not classify the unknown type as an open-world warning$`, suite.theInspectionMustNotClassifyTheUnknownTypeAsAnOpenWorldWarning)
+	ctx.Step(`^loading the artifact must succeed$`, suite.loadingTheArtifactMustSucceed)
+
+	// T-548 exclusion contract
+	ctx.Step(`^the exclusion list covers the derived fields (.*)$`, suite.theExclusionListCoversTheDerivedFields)
+	ctx.Step(`^ExpectedTable still derives routing from the declared type$`, suite.expectedTableStillDerivesRoutingFromTheDeclaredType)
 }
 
 func TestBDDFeatures(t *testing.T) {
@@ -897,5 +1130,33 @@ func TestBDDFeatures(t *testing.T) {
 
 	if status != 0 {
 		t.Fatalf("godog suite failed with status code %d", status)
+	}
+}
+
+// TestBDDDiscipline runs the projection-discipline scenarios in isolation —
+// no Docker, no database. Totality, load-time cross-check, and exclusion are
+// pure-Go contracts, so they are fully developable independently of the DB
+// features and of the PHP producer.
+func TestBDDDiscipline(t *testing.T) {
+	suite := &bddSuite{}
+	opts := godog.Options{
+		Format: "pretty",
+		Paths: []string{
+			"../features/projection_discipline.feature",
+			"../features/derivation_totality.feature",
+			"../features/load_time_cross_check.feature",
+			"../features/exclusion_contract.feature",
+		},
+		TestingT: t,
+	}
+
+	status := godog.TestSuite{
+		Name:                "observatory-dbtools Projection Discipline BDD (no Docker)",
+		ScenarioInitializer: func(c *godog.ScenarioContext) { registerDisciplineSteps(c, suite) },
+		Options:             &opts,
+	}.Run()
+
+	if status != 0 {
+		t.Fatalf("discipline suite failed with status code %d", status)
 	}
 }

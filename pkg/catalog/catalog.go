@@ -104,6 +104,18 @@ func Parse(data []byte) (*Catalog, Warnings, error) {
 		)
 	}
 
+	// Load-time cross-check: every declared type must be known to the Go
+	// consumer. An unknown type would silently skip audit rows, so it is a
+	// hard failure, not an OWA warning (see types.go).
+	for _, p := range raw.Properties {
+		if !KnownType(p.Type) {
+			return nil, nil, fmt.Errorf(
+				"catalog: property %q declares unknown type %q (known: %s)",
+				p.Name, p.Type, strings.Join(KnownTypes(), ", "),
+			)
+		}
+	}
+
 	return &Catalog{
 		Version:    *raw.Version,
 		Properties: raw.Properties,

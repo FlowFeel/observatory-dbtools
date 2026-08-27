@@ -6,7 +6,7 @@ import (
 
 func TestExpectedTable(t *testing.T) {
 	cases := map[string]string{
-		"Text": "smw_di_blob", "Code": "smw_di_blob",
+		"Text": "smw_di_blob",
 		"Date": "smw_di_time", "Number": "smw_di_number",
 		"URL": "smw_di_uri", "Email": "smw_di_uri",
 		"Boolean": "smw_di_bool", "Page": "smw_di_wikipage",

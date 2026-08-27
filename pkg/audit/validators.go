@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
@@ -18,9 +19,14 @@ import (
 // ---------------------------------------------------------------------------
 
 // smwTypeToTable maps a catalog PropertyType to its physical data-item table.
+//
+// This map is the negotiation side of routing: it must be TOTAL over the
+// catalog's KnownTypes (PHP truth) and must NOT route a type truth never
+// declares. Both directions are enforced by RoutingTotality. "Code" was
+// removed — PHP PropertyType truth does not declare it; the load-time
+// cross-check now rejects any artifact that emits it.
 var smwTypeToTable = map[string]string{
 	"Text":    "smw_di_blob",
-	"Code":    "smw_di_blob",
 	"Date":    "smw_di_time",
 	"Number":  "smw_di_number",
 	"URL":     "smw_di_uri",
@@ -32,7 +38,6 @@ var smwTypeToTable = map[string]string{
 // smwTypeToCode maps a catalog PropertyType to the SMW internal type id.
 var smwTypeToCode = map[string]string{
 	"Text":    "_txt",
-	"Code":    "_cod",
 	"Date":    "_dat",
 	"Number":  "_num",
 	"URL":     "_uri",
@@ -43,7 +48,7 @@ var smwTypeToCode = map[string]string{
 
 // smwCodeToHuman maps SMW internal codes to human type names (for diagnostics).
 var smwCodeToHuman = map[string]string{
-	"_txt": "Text", "_cod": "Code", "_dat": "Date", "_num": "Number",
+	"_txt": "Text", "_dat": "Date", "_num": "Number",
 	"_uri": "URL", "_ema": "Email", "_boo": "Boolean", "_wpg": "Page",
 }
 
@@ -58,6 +63,82 @@ var dataItemTables = []string{
 func ExpectedTable(propType string) (string, bool) {
 	t, ok := smwTypeToTable[propType]
 	return t, ok
+}
+
+// RoutingTotality verifies the derivation tables are complete and total over
+// the catalog's KnownTypes (PHP truth), and do not route anything truth never
+// declares. Two directions:
+//
+//   - Total over truth: every known type has a storage table, an SMW code,
+//     and round-trips through that code; the audit scan set equals the set of
+//     routable tables.
+//   - No extras: a routed type, a routed code, or a decoded human name that
+//     PHP truth does not declare is a divergence, reported as a problem.
+//
+// Returns a list of problems; empty means the derivation is total.
+func RoutingTotality() []string {
+	var problems []string
+
+	for _, t := range catalog.KnownTypes() {
+		tbl, ok := smwTypeToTable[t]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("known type %q has no storage table", t))
+			continue
+		}
+		code, ok := smwTypeToCode[t]
+		if !ok {
+			problems = append(problems, fmt.Sprintf("known type %q has no SMW code", t))
+			continue
+		}
+		if human, ok := smwCodeToHuman[code]; !ok || human != t {
+			problems = append(problems, fmt.Sprintf("type %q does not round-trip through its SMW code %q", t, code))
+		}
+		if !inStrings(dataItemTables, tbl) {
+			problems = append(problems, fmt.Sprintf("routed table %q for %q is not in the audit scan set", tbl, t))
+		}
+	}
+
+	// No extras: routed types, codes, and decoded names must all be truth.
+	for t := range smwTypeToTable {
+		if !catalog.KnownType(t) {
+			problems = append(problems, fmt.Sprintf("routing table knows type %q that PHP truth does not declare", t))
+		}
+	}
+	for t := range smwTypeToCode {
+		if !catalog.KnownType(t) {
+			problems = append(problems, fmt.Sprintf("type-code table knows type %q that PHP truth does not declare", t))
+		}
+	}
+	for code, human := range smwCodeToHuman {
+		if !catalog.KnownType(human) {
+			problems = append(problems, fmt.Sprintf("SMW code %q decodes to %q which PHP truth does not declare", code, human))
+		}
+	}
+
+	// Scan set must not contain unreachable tables.
+	for _, tbl := range dataItemTables {
+		reachable := false
+		for _, t := range catalog.KnownTypes() {
+			if smwTypeToTable[t] == tbl {
+				reachable = true
+				break
+			}
+		}
+		if !reachable {
+			problems = append(problems, fmt.Sprintf("scanned table %q is not reachable from any known type", tbl))
+		}
+	}
+
+	return problems
+}
+
+func inStrings(xs []string, want string) bool {
+	for _, x := range xs {
+		if x == want {
+			return true
+		}
+	}
+	return false
 }
 
 // TypeMatchesStoredValue reports whether a stored smw_fpt_type serialized

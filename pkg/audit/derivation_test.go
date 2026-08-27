@@ -24,7 +24,6 @@ func loadFixtureBytes(t *testing.T) []byte {
 func TestExpectedTableIsTypeDerived(t *testing.T) {
 	checks := map[string]string{
 		"Text":    "smw_di_blob",
-		"Code":    "smw_di_blob",
 		"Date":    "smw_di_time",
 		"Number":  "smw_di_number",
 		"URL":     "smw_di_uri",
