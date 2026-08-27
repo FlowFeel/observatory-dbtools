@@ -352,7 +352,62 @@ Feature: Semantic Value-Range Consistency
 
 ---
 
-## 7. What Doesn't Change
+## 7. Patterns & Anti-Patterns (Design Grounding)
+
+### Patterns Applied
+
+| Pattern | Source | How |
+|---------|--------|-----|
+| Logic/IO Separation | `:phos.arch/fka` (PHOS-ARCH-001) | Pure PHP domain, pure Go domain, serialized artifact as boundary |
+| Hexagonal (Ports & Adapters) | Phosphene architecture | `catalog.json` is the port; PHP export and Go loader are opposing adapters |
+| Consumer-Driven Contracts | Pact pattern | Catalog (consumer) declares expectations; `pkg/audit` verifies provider (DB) satisfies them |
+| Decomposition Before Code | War story: template-provider-contracts | Three contracts independently verifiable; design reviewed before implementation |
+| Test Pyramid | dbtools existing | Unit (pkg/catalog), Integration (pkg/audit via testcontainers), BDD (Godog contract features) |
+| JSON as Boundary Only | dbtools existing principle | `catalog.json` is serialization artifact; Go structs and PHP DTOs have no cross-dependency |
+| Positive Predication | `:phos.arch/positive-predication` (PHOS-ARCH-009) | Contracts state what the DB *must* satisfy, not what it must avoid |
+| Graduated Discovery | `:phos.arch/discovery` (PHOS-ARCH-008) | Audit reports progress from summary → per-contract → per-violation detail |
+
+### Anti-Patterns Eliminated
+
+| Anti-Pattern | Where | Fix |
+|--------------|-------|-----|
+| Hardcoded Domain Knowledge | `curate.RequiredProperties`, `drift p_id=29` | Catalog-driven generation, drift registry |
+| Implicit Contract | No verification between catalog and DB | Three explicit, auditable contracts |
+| Unidirectional Assumption | DB-only source of truth | Bidirectional: catalog→DB and DB→catalog |
+
+### Anti-Patterns to Guard Against in Implementation
+
+**A. Brittle Serialization (`catalog.json` schema drift).**
+If the export format changes (new fields, restructured entities), the Go loader
+breaks silently. `catalog.json` MUST include a `"version": 1` field. The Go
+loader validates the version before parsing. Format changes are semver — major
+version bump for breaking changes, minor for additive.
+
+**B. Unbounded Query (audit scope explosion).**
+Contract 3 (value-range) queries every stored value for every constrained
+property. On a production database with 800K+ SMW object IDs, a naive
+`SELECT * FROM smw_di_blob` is catastrophic. The audit MUST stream results
+via cursor-based pagination (`WHERE s_id > last_id LIMIT 1000`). The audit
+report accumulates violations without holding the full result set in memory.
+
+**C. Oversimplified Test Fixture.**
+The existing `bdd_test.go` creates synthetic minimal tables. Contract tests
+need the actual baseline schema with realistic property declarations — at
+minimum, the 5 entity archetypes with their full property sets from the
+catalog. Test fixtures that don't match production shape produce false greens.
+This is the lesson from the template-provider-contracts war story: "pushing
+code to CI to discover what your code does is the hairball reflex."
+
+**D. Coupled Release Cycles.**
+If the magazine catalog and dbtools must ship simultaneously, we've created a
+distributed monolith. The `catalog.json` artifact must be backwards-compatible
+across minor versions. dbtools should degrade gracefully on missing fields
+(OWA compliance — `:phos.arch/owa`, PHOS-ARCH-002): unknown properties in
+the catalog are preserved and reported as warnings, not failures.
+
+---
+
+## 8. What Doesn't Change
 
 - `pkg/connect` — connection management, no semantic relation
 - `pkg/baseline` — schema import/export, infrastructure
