@@ -93,7 +93,7 @@ func (s *bddSuite) anSMWDatabaseWithFPTEntriesAndDIEntries(fptCount, diCount int
 }
 
 func (s *bddSuite) aDriftCheckIsPerformed() error {
-	rep, err := drift.Check(s.db)
+	rep, err := drift.Check(s.db, drift.DefaultRegistry())
 	if err != nil {
 		return err
 	}
@@ -105,14 +105,17 @@ func (s *bddSuite) missingDIEntriesShouldBeDetected(expected int) error {
 	if s.driftRep == nil {
 		return fmt.Errorf("no drift check report found")
 	}
-	if s.driftRep.MissingInDI != expected {
-		return fmt.Errorf("expected %d missing, got %d", expected, s.driftRep.MissingInDI)
+	if len(s.driftRep.Targets) == 0 {
+		return fmt.Errorf("no drift targets in report")
+	}
+	if s.driftRep.Targets[0].MissingInDI != expected {
+		return fmt.Errorf("expected %d missing, got %d", expected, s.driftRep.Targets[0].MissingInDI)
 	}
 	return nil
 }
 
 func (s *bddSuite) aDriftFixIsExecuted() error {
-	fixed, err := drift.Fix(s.db)
+	fixed, err := drift.Fix(s.db, drift.DefaultRegistry())
 	if err != nil {
 		return err
 	}
@@ -128,11 +131,11 @@ func (s *bddSuite) rowsShouldBeInsertedIntoSmw_di_time(expected int64) error {
 }
 
 func (s *bddSuite) aSubsequentDriftCheckShouldDetectZeroDrift() error {
-	rep, err := drift.Check(s.db)
+	rep, err := drift.Check(s.db, drift.DefaultRegistry())
 	if err != nil {
 		return err
 	}
-	if rep.HasDrift() {
+	if rep.HasDrift {
 		return fmt.Errorf("expected zero drift, got: %s", rep.String())
 	}
 	return nil
