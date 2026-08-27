@@ -1,26 +1,50 @@
 # SMW Database Architecture — Semantic Contracts Design
 
-## Status: DRAFT — Two-Pipe Design (not yet implemented)
+## Status: SPEC — Two-Pipe Architecture (authoritative)
 Branch: `refactor/semantic-db-contracts` on `FlowFeel/observatory-dbtools`
 Date: 2026-08-27
+Authors: Ed Phil, Flow
 
 ---
 
-## 1. The Problem
+## 1. The Two-Pipe Architecture
 
-dbtools manages the MySQL storage layer (schema, baselines, drift, curation).
-The magazine now has a pure PHP semantics domain that declares 83 sovereign
-properties with types, allowed values, and schema.org mappings, compiled by a
-hermeneutic compiler into a sealed `PropertyCatalog`.
+The Two-Pipe architecture establishes an authoritative contract between
+declarative domain intelligence and relational persistence. Semantic MediaWiki
+represents a dual storage paradigm where abstract assertions are partitioned
+across identity lookup tables (`smw_object_ids`), metadata registries
+(`smw_fpt_*`), and typed data-item tables (`smw_di_*`). Decoupling the PHP
+domain compiler from the Go database engine via a versioned serialization
+artifact (`catalog.json`) preserves language independence while enforcing
+rigorous structural assertions over the persistence layer.
 
-These two systems share a boundary — the SMW relational tables — but have no
-contract between them. dbtools validates that tables *exist*; it does not
-validate that stored *values* conform to declared *semantics*. The `curate`
-package hardcodes property lists. The `drift` package hardcodes property IDs.
-No contract verifies that the database state matches the catalog declarations.
-
-This document is a complete accounting of the database design from the
-perspective of the semantic redesign, and a proposal for the contract layer.
+```
+┌──────────────────────────────────────┐
+│   PHP Semantic Domain (The Producer) │
+│   • Sovereign Property Manifests     │
+│   • Entity Composition Manifests     │
+│   • Hermeneutic Compiler             │
+└──────────────────┬───────────────────┘
+                   │
+                   ▼  (bin/export-catalog.php)
+┌──────────────────────────────────────┐
+│   catalog.json (Version 1)           │  <--- Portable Serialized Contract
+└──────────────────┬───────────────────┘
+                   │
+                   ▼  (pkg/catalog Loader)
+┌──────────────────────────────────────┐
+│   Go dbtools (The Auditor)           │
+│   • pkg/audit  (Contracts 1, 2, 3)   │
+│   • pkg/curate (Page Generation)     │
+│   • pkg/drift  (Topological Registry)│
+└──────────────────┬───────────────────┘
+                   │
+                   ▼  (Cursor-Streamed Verification)
+┌──────────────────────────────────────┐
+│   MySQL Semantic MediaWiki Store     │
+│   • smw_object_ids, smw_fpt_*, smw_di_* │
+└──────────────────────────────────────┘
+```
 
 ---
 
@@ -34,10 +58,9 @@ perspective of the semantic redesign, and a proposal for the contract layer.
 | MW Links | ~10 | pagelinks, templatelinks, categorylinks, externallinks | None — structural links |
 | MW Search | ~5 | searchindex, querycache, querycachetwo | None — search infra |
 | MW Object Cache | ~3 | objectcache, l10n_cache, updatelog | None — cache |
-| SMW Object IDs | 1 | smw_object_ids | **Direct**/subject→ID binding** |
+| SMW Object IDs | 1 | smw_object_ids | **Direct — subject→ID binding** |
 | SMW Data Item (DI) | 7 | smw_di_blob, _bool, _coords, _number, _time, _uri, _wikipage | **Direct — stores property values by type** |
 | SMW Fixed Property (FPT) | 20 | smw_fpt_type, _pval, _mdat, _inst, _subp, _impo, ... | **Direct — stores property metadata** |
-|(adsbygoogle = window.adsbygoogle || []).push({});
 | SMW Stats | 3 | smw_prop_stats, smw_query_links, smw_object_aux | **Indirect — usage counts** |
 | SMW Concept | 1 | smw_concept_cache | None — concept cache |
 | Extension tables | ~30 | echo, discussiontools, ajaxpoll, etc. | None — extension-specific |
@@ -46,9 +69,8 @@ perspective of the semantic redesign, and a proposal for the contract layer.
 
 #### smw_object_ids — The Identity Table
 
-Every entity (page, property, value) gets an integer ID here. This is the
-rigid designator at the storage level — `smw_id` is the Bedeutung (reference),
-`smw_title` is the Sinn (sense/name).
+Every entity (page, property, value) gets an integer ID. `smw_id` is the
+Bedeutung (reference), `smw_title` is the Sinn (sense/name).
 
 | Column | Role | Maps To |
 |--------|------|---------|
@@ -59,19 +81,11 @@ rigid designator at the storage level — `smw_id` is the Bedeutung (reference),
 | smw_subobject | Subobject name | Participant subobject refs |
 | smw_sortkey | Sort key | — |
 
-**Contract:** Every `Property:` page in `smw_object_ids` must correspond to a
-declared property in the catalog. Every catalog property must have a
-corresponding `smw_object_ids` entry (smw_namespace=102, smw_title=property name).
-
 #### smw_di_* — Data Item Tables (Value Storage by Type)
-
-Each table stores values for properties of a specific SMW type. The `p_id`
-column references `smw_object_ids.smw_id` for the property. The `s_id`
-references the subject entity.
 
 | Table | SMW Type | Catalog PropertyType | Value Column |
 |-------|----------|---------------------|-------------|
-| smw_di_blob | Text, Code | TEXT | o_hash (short) /5, o_blob (long) |
+| smw_di_blob | Text, Code | TEXT | o_hash (short), o_blob (long) |
 | smw_di_bool | Boolean | BOOLEAN | o_value (tinyint) |
 | smw_di_coords | Geographic coordinate | — (not in catalog) | o_blob |
 | smw_di_number | Number, Quantity | NUMBER | o_blob, o_hash |
@@ -79,16 +93,7 @@ references the subject entity.
 | smw_di_uri | URL, Email, Annotation URI | URL, EMAIL | o_serialized |
 | smw_di_wikipage | Page | PAGE | o_id (→ smw_object_ids) |
 
-**Contract:** For every row in `smw_di_*`, the `p_id` must resolve to a
-declared property in the catalog whose `PropertyType` matches the table's type.
-A `smw_di_time` row with a `p_id` pointing to a TEXT property is a type
-violation — the value is stored in the wrong table.
-
 #### smw_fpt_* — Fixed Property Tables (Metadata Storage)
-
-These tables store property *metadata* — type declarations, allowed values,
-subproperty relations, imports (equivalence mappings), etc. Each FPT table
-corresponds to a built-in SMW property.
 
 | Table | SMW Built-in | Catalog Field | What It Stores |
 |-------|-------------|---------------|----------------|
@@ -98,8 +103,8 @@ corresponds to a built-in SMW property.
 | smw_fpt_impo | Equivalent property | equivalentProperty | External ontology mapping (schema.org) |
 | smw_fpt_inst | Instance of | — (category membership) | Entity → category |
 | smw_fpt_mdat | Modification date | — (internal) | _MDAT routing (drift check target) |
-| smw_fpt_dtitle | Display title | — (Display title of) | Display title override |
-| smw_fpt_text | Has property | — (text storage) | Text property values |
+| smw_fpt_dtitle | Display title | — | Display title override |
+| smw_fpt_text | Has property | — | Text property values |
 | smw_fpt_uri | Has URI | — | URI property values |
 | smw_fpt_sobj | Has subobject | — | Subobject existence |
 | smw_fpt_redi | Redirect | — | Property redirects |
@@ -115,14 +120,6 @@ corresponds to a built-in SMW property.
 | smw_fpt_serv | Service | — | — |
 | smw_fpt_unit | Unit | — | Display unit |
 
-**Contract:** For every property in the catalog:
-1. `smw_fpt_type` must contain a row with `s_id` = property's `smw_id` and
-   `o_serialized` matching the declared `PropertyType`.
-2. If the catalog declares `AllowedValues`, `smw_fpt_pval` must contain rows
-   for each allowed value with `s_id` = property's `smw_id`.
-3. If the catalog declares `equivalentProperty`, `smw_fpt_impo` must contain
-   a row with the external IRI.
-
 #### smw_prop_stats — Usage Statistics
 
 | Column | Role |
@@ -131,105 +128,87 @@ corresponds to a built-in SMW property.
 | usage_count | Number of entities using this property |
 | null_count | Number of null values |
 
-**Contract:** Every `p_id` in `smw_prop_stats` must resolve to a catalog
-property. Every catalog property with usage > 0 must have a `smw_prop_stats`
-entry.
-
 ---
 
-## 3. The Contract Layer — Three Contracts
+## 3. The Three Contracts
 
 ### Contract 1: Declaration-Storage Consistency
 
-**Direction:** Catalog → Database
+Contract 1 enforces top-down structural realization. Natural language gloss: an
+authoritative verification policy ensuring that every abstract property defined
+in the catalog is materialized as a physical entity within the database.
 
-Every property declared in the catalog must be present in the database with
-matching metadata:
-- `smw_object_ids` entry exists (smw_namespace=102, smw_title=property name)
-- `smw_fpt_type` entry matches declared `PropertyType`
-- `smw_fpt_pval` entries match declared `AllowedValues` (when non-empty)
-- `smw_fpt_impo` entry matches declared `equivalentProperty` (when non-null)
+**Identity Allocation:** Asserts that every property name exists within
+`smw_object_ids` under the dedicated property namespace (`smw_namespace = 102`).
+Missing entries indicate uninstantiated property definitions that cannot
+participate in graph joins.
 
-**Violation example:** Catalog declares `Event type` as Text with allowed
-values [In-Person, Virtual, Hybrid], but `smw_fpt_pval` has no rows for the
-property's `s_id`. The property page was never created or was deleted.
+**Metadata Table Synchronization:** Validates that the property's semantic type
+in `smw_fpt_type`, its range bounds in `smw_fpt_pval`, and its external
+vocabulary mapping in `smw_fpt_impo` match the catalog declaration.
 
-### Contract 2: Value-Type Consistency
+**Transactional State Awareness:** Detects incomplete MediaWiki job queue
+executions where property pages were created in wikitext but have not yet been
+parsed into the fixed property metadata tables. The contract distinguishes
+between "property was never declared" (true violation) and "property declared
+but not yet parsed" (transient state — report as warning, not failure).
 
-**Direction:** Database → Catalog
+### Contract 2: Value-Type Consistency and Table Routing
 
-Every stored value must be in the correct data-item table for its property's
-declared type:
-- A property declared as DATE must have values in `smw_di_time`, not `smw_di_blob`
-- A property declared as URL must have values in `smw_di_uri`, not `smw_di_blob`
-- A property declared as PAGE must have values in `smw_di_wikipage`
+Contract 2 enforces physical type integrity from the database back to the domain
+model. Natural language gloss: a relational routing assertion verifying that
+stored attribute values reside exclusively within the data-item table designated
+for their declared semantic type.
 
-**Violation example:** `Event start date` is declared as DATE in the catalog,
-but a value "2026-08-27" is stored in `smw_di_blob` (Text table) instead of
-`smw_di_time`. This happens when SMW's type routing is corrupted or when a
-property's type was changed after values were already stored.
+**Mitigating Historical Type Drift:** When an administrator alters a property's
+type in wikitext (for instance, changing a property from unstructured text to an
+ISO date), the semantic engine does not retroactively migrate existing rows
+from `smw_di_blob` to `smw_di_time`. Contract 2 acts as a forensic diagnostic
+identifying orphaned values trapped in deprecated physical tables.
 
-### Contract 3: Value-Range Consistency
+**Foreign Key and Table Alignment:** Traverses every row in each `smw_di_*`
+table, verifies that the foreign key property identifier (`p_id`) resolves to a
+known catalog property, and confirms that the physical table aligns with the
+declared `PropertyType`.
 
-**Direction:** Database → Catalog
+| Stored Value Table | Declared PropertyType | Storage Integrity |
+|--------------------|-----------------------|--------------------|
+| smw_di_blob | Text, Code | Valid Routing |
+| smw_di_time | Date | Valid Routing |
+| smw_di_uri | URL, Email | Valid Routing |
+| smw_di_wikipage | Page | Valid Routing |
+| smw_di_blob | Date (Historical Drift) | Routing Violation |
 
-Every stored value must satisfy the declared allowed-values constraint:
-- If `AllowedValues` is non-empty, the stored value must be in the set
-- If the type is DATE, the value must be a valid date
-- If the type is URL, the value must be a valid URL
+### Contract 3: Value-Range Consistency and Historical Invariants
 
-**Violation example:** `Event type` allows [In-Person, Virtual, Hybrid], but
-`smw_di_blob` contains "Webinar" for some entity. This is the historical drift
-the edit gate prevents going forward — this contract catches what already
-slipped through.
+Contract 3 audits historical values against domain invariants. Natural language
+gloss: a semantic audit verifying that all persisted literal values conform to
+range restrictions and syntactic formatting constraints.
+
+**Set-Theoretic Range Verification:** Inspects discrete literal values stored in
+`smw_di_blob` or `smw_di_wikipage` and asserts membership within the declared
+`AllowedValues` set.
+
+**Syntactic Scalar Validation:** Verifies that date strings in `smw_di_time`
+adhere to standardized ISO temporal specifications and that URI strings in
+`smw_di_uri` conform to absolute web addresses.
+
+**Catching Legacy Data:** Identifies corrupt or non-standard assertions that
+were committed before the introduction of real-time edit-filtering hooks.
 
 ---
 
-## 4. Proposed Architecture
+## 4. Go Architectural Subsystems in dbtools
 
-###> dbtools is a Go service. The catalog is PHP. The contracts must be
-> verifiable without a PHP runtime. Solution: the catalog manifests are
-> pure data (PHP files returning arrays/DTOs). A codegen step exports
-> the compiled catalog to a portable format (JSON) that Go consumes.
+The Go implementation decomposes verification into isolated functional packages,
+preventing runtime coupling with the PHP application.
 
-### 4.1 Catalog Export — The Shared Artifact
+### The Catalog Ingestion Layer (`pkg/catalog`)
 
-A new `bin/export-catalog.php` script in the magazine repo:
-- Loads the property manifests and entity compositions
-- Compiles via `CatalogBuilder::build()`
-- Exports to `catalog.json` — a flat JSON file with all property declarations
-
-```json
-{
-  "properties": [
-    {
-      "name": "Event type",
-      "type": "Text",
-      "allowed": ["In-Person", "Virtual", "Hybrid"],
-      "equivalent": "https://schema.org/eventAttendanceMode",
-      "aliases": ["Type", "Attendance mode"]
-    },
-    ...
-  ],
-  "entities": [
-    {
-      "name": "Event",
-      "gloss": "A temporal occurrence...",
-      "properties": ["Event type", "Event start date", ...]
-    },
-    ...
-  ]
-}
-```
-
-This file is the contract surface — generated, not hand-edited. Go reads it,
-PHP writes it. The codegen runs in CI before dbtools tests.
-
-### 4.2 Go Packages — Redesigned
-
-#### `pkg/catalog` (NEW) — Catalog Loader
-
-Loads `catalog.json` into typed Go structs. Pure parsing, no DB access.
+Loads and parses `catalog.json` into typed, read-only Go memory structures.
+Natural language gloss: a stateless parser providing an in-memory knowledge
+index for database auditing routines. It validates that the serialized artifact
+contains a compatible major version header before exposing the domain schema.
 
 ```go
 type PropertyDeclaration struct {
@@ -247,14 +226,26 @@ type EntityDefinition struct {
 }
 
 type Catalog struct {
+    Version   int                  `json:"version"`
     Properties []PropertyDeclaration `json:"properties"`
     Entities   []EntityDefinition   `json:"entities"`
 }
 ```
 
-#### `pkg/audit` (NEW) — Contract Verifier
+### The Streaming Audit Engine (`pkg/audit`)
 
-Three audit functions, one per contract:
+Executes validation queries across large datasets without memory exhaustion.
+Natural language gloss: a batch-processing engine that queries database rows
+using bounded cursor streams and evaluates them against the catalog.
+
+**Cursor-Based Paging:** Executes queries using indexed cursor ranges
+(`WHERE s_id > last_seen_id ORDER BY s_id ASC LIMIT 1000`) rather than loading
+unbounded tables into memory, allowing safe execution across multi-gigabyte
+production databases.
+
+**Diagnostic Reporting:** Accumulates violations into structured diagnostic
+models detailing the subject entity, property identifier, invalid value, and
+specific rule failure without terminating audit runs prematurely.
 
 ```go
 // Contract 1: Declaration-Storage Consistency
@@ -267,30 +258,27 @@ func AuditValueTypes(db *sql.DB, catalog *Catalog) (*AuditReport, error)
 func AuditValueRanges(db *sql.DB, catalog *Catalog) (*AuditReport, error)
 ```
 
-Each returns an `AuditReport` with violations (table, entity, property, value,
-diagnostic). Pure logic against the DB query results + catalog — no side effects.
+### Dynamic Schema Curation (`pkg/curate`)
 
-#### `pkg/curate` (REDESIGNED) — Catalog-Driven Curation
+Replaces hardcoded property arrays with dynamic generation driven by
+`pkg/catalog`. Natural language gloss: a schema maintenance service that
+provisions missing semantic property pages directly from declarative
+specifications.
 
-`RequiredProperties` is replaced by `catalog.RequiredPropertyPages()` —
-generated from the loaded `catalog.json`. No more hardcoded lists.
+### Topological Drift Registry (`pkg/drift`)
 
-#### `pkg/drift` (GENERALIZED) — Drift Registry
-
-Instead of hardcoded `p_id=29`, a drift registry maps property names to their
-FPT/DI table pairs:
+Generalizes property drift tracking beyond single hardcoded identifiers.
+Natural language gloss: a configurable registry mapping arbitrary property
+identities to their expected fixed-property and data-item storage locations.
 
 ```go
 type DriftTarget struct {
     PropertyName string
     FptTable     string
     DiTable      string
-    Pid          int&bsp;int
+    Pid          int
 }
 ```
-
-`_MDAT` is one entry. Future drift targets (e.g., `_INST` routing) are added
-to the registry without new code.
 
 ---
 
@@ -310,9 +298,23 @@ Feature: Semantic Property Declaration-Storage Consistency
     And its smw_fpt_pval must match the declared allowed values
 
   Scenario: Property missing from database
-    Given a catalog/compiled property catalog with property "Event type"
+    Given a compiled property catalog with property "Event type"
     And a database where "Event type" has no smw_object_ids entry
     Then an audit should report a declaration violation
+```
+
+```gherkin
+Feature: Semantic Value-Type Consistency
+  As a database engineer
+  I want to verify that stored values reside in the correct data-item table
+  So that SMW routing integrity is maintained
+
+  Scenario: Historical type drift — Date values in smw_di_blob
+    Given a property "Event start date" declared as Date in the catalog
+    And a database with smw_di_blob rows for that property's p_id
+    Then an audit should report a routing violation
+    And the diagnostic should include the expected table (smw_di_time)
+    And the diagnostic should include the actual table (smw_di_blob)
 ```
 
 ```gherkin
@@ -332,23 +334,26 @@ Feature: Semantic Value-Range Consistency
 
 ## 6. Implementation Sequencing
 
-1. **Catalog export** (magazine side) — `bin/export-catalog.php` generates
-   `catalog.json`. CI artifact. This is the shared contract surface.
+### Phase 1: Contract Serialization
 
-2. **`pkg/catalog`** (dbtools) — Go loader for `catalog.json`. Unit tests
-   with a test fixture JSON file.
+Implement `bin/export-catalog.php` in the magazine repository to emit the sealed
+`catalog.json` with an explicit semantic version header during build pipelines.
 
-3. **`pkg/audit`** (dbtools) — Three contract auditors. Integration tests
-   with testcontainers: load seed, inject known violations, verify detection.
+### Phase 2: In-Memory Go Loader
 
-4. **`pkg/curate` redesign** — Replace hardcoded lists with catalog-driven
-   generation. Existing tests updated.
+Implement `pkg/catalog` in dbtools, verifying deserialization with static JSON
+test fixtures.
 
-5. **BDD features** — `features/semantic_contracts.feature`. Godog step
-   definitions in `test/bdd_test.go`.
+### Phase 3: Relational Auditors
 
-6. **`pkg/drift` generalization** — Drift registry. Lower priority — only
-   needed for multi-property drift tracking.
+Implement `AuditDeclarations`, `AuditValueTypes`, and `AuditValueRanges` in
+`pkg/audit`, utilizing `testcontainers-go` to run integration tests against real
+MySQL instances pre-loaded with valid and invalid semantic fixture sets.
+
+### Phase 4: Curation and Drift Alignment
+
+Update `pkg/curate` to consume the loaded catalog and configure `pkg/drift`
+using the topological registry pattern.
 
 ---
 
