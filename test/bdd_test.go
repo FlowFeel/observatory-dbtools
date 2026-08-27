@@ -42,6 +42,11 @@ type bddSuite struct {
 
 	// load-time cross-check state (T-547)
 	lastLoadErr error
+
+	// currentProp is the property named by the most recent Given step
+	// (e.g. "a compiled property catalog with property \"Event type\"").
+	// Steps phrased "for that property" resolve the property from here.
+	currentProp string
 }
 
 // propertyPageNS is the MediaWiki namespace for Property pages.
@@ -203,6 +208,8 @@ func (s *bddSuite) aCompiledPropertyCatalogWithProperty(propName string) error {
 	if s.catalog.PropertyByName(propName) == nil {
 		return fmt.Errorf("property %q not in fixture catalog", propName)
 	}
+	// "that property" in subsequent steps resolves to this one.
+	s.currentProp = propName
 	return nil
 }
 
@@ -229,6 +236,8 @@ func (s *bddSuite) aCompiledPropertyCatalogWithAPageProperty(propName string) er
 		Entities: nil,
 	}
 	s.pIDByProperty = make(map[string]int)
+	// "that property" in subsequent steps resolves to this one.
+	s.currentProp = propName
 	return nil
 }
 
@@ -368,7 +377,20 @@ func (s *bddSuite) aDatabaseWithADatePropertyStoredInSmwDiTime() error {
 	return err
 }
 
-func (s *bddSuite) aDatabaseWithBlobRowsForThatPropertysPID(propName string) error {
+// currentPropIs returns the property named by the preceding Given step, or an
+// error when none has been set.
+func (s *bddSuite) currentPropIs() (string, error) {
+	if s.currentProp == "" {
+		return "", fmt.Errorf("no current property set by a preceding Given step")
+	}
+	return s.currentProp, nil
+}
+
+func (s *bddSuite) aDatabaseWithBlobRowsForThatPropertysPID() error {
+	propName, err := s.currentPropIs()
+	if err != nil {
+		return err
+	}
 	if err := s.aDatabaseWithSMWTablesLoaded(); err != nil {
 		return err
 	}
@@ -396,7 +418,11 @@ func (s *bddSuite) aDatabaseWithBlobRowsReferencingAnUnknownPID() error {
 	return err
 }
 
-func (s *bddSuite) aDatabaseWithBlobContainingForThatProperty(value, propName string) error {
+func (s *bddSuite) aDatabaseWithBlobContainingForThatProperty(value string) error {
+	propName, err := s.currentPropIs()
+	if err != nil {
+		return err
+	}
 	if err := s.aDatabaseWithSMWTablesLoaded(); err != nil {
 		return err
 	}
@@ -417,7 +443,11 @@ func (s *bddSuite) aDatabaseWithBlobContainingForThatProperty(value, propName st
 	return err
 }
 
-func (s *bddSuite) aDatabaseWithTimeContainingForThatProperty(value, propName string) error {
+func (s *bddSuite) aDatabaseWithTimeContainingForThatProperty(value string) error {
+	propName, err := s.currentPropIs()
+	if err != nil {
+		return err
+	}
 	if err := s.aDatabaseWithSMWTablesLoaded(); err != nil {
 		return err
 	}
@@ -436,7 +466,11 @@ func (s *bddSuite) aDatabaseWithTimeContainingForThatProperty(value, propName st
 	return err
 }
 
-func (s *bddSuite) aDatabaseWithWikipageOIDPointingToNonExistent(propName string) error {
+func (s *bddSuite) aDatabaseWithWikipageOIDPointingToNonExistent() error {
+	propName, err := s.currentPropIs()
+	if err != nil {
+		return err
+	}
 	if err := s.aDatabaseWithSMWTablesLoaded(); err != nil {
 		return err
 	}
@@ -1019,7 +1053,7 @@ func InitializeScenario(ctx *godog.ScenarioContext, suite *bddSuite) {
 	ctx.Step(`^a database with smw_di_blob rows referencing an unknown p_id$`, suite.aDatabaseWithBlobRowsReferencingAnUnknownPID)
 	ctx.Step(`^an audit should report zero routing violations$`, suite.anAuditShouldReportZeroRoutingViolations)
 	ctx.Step(`^an audit should report a routing violation$`, suite.anAuditShouldReportARoutingViolation)
-	ctx.Step(`^the diagnostic should include the expected table smw_di_time$`, suite.theDiagnosticShouldIncludeTheExpectedTable)
+	ctx.Step(`^the diagnostic should include the expected table (\w+)$`, suite.theDiagnosticShouldIncludeTheExpectedTable)
 	ctx.Step(`^an audit should report an orphaned predicate$`, suite.anAuditShouldReportAnOrphanedPredicate)
 
 	// T-538 semantic contract steps (Contract 3 — value ranges)
