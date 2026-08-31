@@ -98,3 +98,10 @@ DB_HOST=localhost DB_PORT=3306 DB_PASS=secret go run ./cmd/dbtools migrate --dir
 ## Initiative Context
 
 Part of **[I-005: Database Tooling](https://github.com/phosphene/woodchipper)** — contract-driven migration testing and database management for the Observatory platform.
+
+## Documentation Index
+
+- **[Semantic DB Contracts Design](docs/semantic-db-contracts-design.md)** — the two-pipe architecture spec: PHP producer → `catalog.json` → Go auditor (authoritative).
+- **[PHP Producer Side — Slice 1 State](docs/php-producer-slice1-state.md)** — T-424: the PHP raw SMW schema writer (`SmwBulkSink`/`MysqlSmwDb`) — dry-run-first, CI proof, landmines. The producer half of the two pipes.
+- **[Architecture & Testing Strategy](docs/architecture.md)** — design principles, test pyramid, SMW drift reconciliation.
+- **[Projection Discipline](docs/projection-discipline.md)** — page-generation projection rules as an executable spec.
