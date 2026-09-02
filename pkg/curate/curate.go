@@ -1,4 +1,9 @@
 // Package curate generates contract-tested, sanitized database seeds for Test, Stage, and Prod.
+//
+// Curation is catalog-driven: required property pages are derived from the
+// compiled property catalog, not hardcoded lists. This eliminates the
+// "magic string" anti-pattern where domain knowledge was embedded in code
+// rather than derived from the source of truth.
 package curate
 
 import (
@@ -6,23 +11,19 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/FlowFeel/observatory-dbtools/pkg/catalog"
 )
 
 // RequiredPortalPages lists mandatory area portals that MUST exist in canonical seeds.
+// These are structural pages, not semantic properties — they come from the
+// MW page structure, not the property catalog.
 var RequiredPortalPages = []string{
 	"Main_Page",
 	"Animals",
 	"Classics",
 	"Dig_Labs",
 	"Human_Bridges",
-}
-
-// RequiredProperties lists core SMW properties needed for area rendering.
-var RequiredProperties = []string{
-	"Property:Area",
-	"Property:Cover_image",
-	"Property:Display_date",
-	"Property:Author",
 }
 
 // Plan represents dataset curation rules for a tier.
@@ -34,14 +35,15 @@ type Plan struct {
 	IncludeJobQueue    bool     `json:"include_job_queue"`
 }
 
-// NewPlan returns the curation policy for a given tier.
-func NewPlan(tier string) (*Plan, error) {
+// NewPlan returns the curation policy for a given tier, with property pages
+// derived from the loaded catalog.
+func NewPlan(tier string, c *catalog.Catalog) (*Plan, error) {
 	switch strings.ToLower(tier) {
 	case "test":
 		return &Plan{
 			Tier:               "test",
 			RequiredPages:      RequiredPortalPages,
-			RequiredProperties: RequiredProperties,
+			RequiredProperties: catalogPropertyPages(c),
 			AnonymizeUsers:     true,
 			IncludeJobQueue:    false,
 		}, nil
@@ -49,7 +51,7 @@ func NewPlan(tier string) (*Plan, error) {
 		return &Plan{
 			Tier:               "stage",
 			RequiredPages:      RequiredPortalPages,
-			RequiredProperties: RequiredProperties,
+			RequiredProperties: catalogPropertyPages(c),
 			AnonymizeUsers:     true,
 			IncludeJobQueue:    false,
 		}, nil
@@ -57,13 +59,26 @@ func NewPlan(tier string) (*Plan, error) {
 		return &Plan{
 			Tier:               "prod",
 			RequiredPages:      RequiredPortalPages,
-			RequiredProperties: RequiredProperties,
+			RequiredProperties: catalogPropertyPages(c),
 			AnonymizeUsers:     false,
 			IncludeJobQueue:    false,
 		}, nil
 	default:
 		return nil, fmt.Errorf("curate: unknown tier %q (valid: test, stage, prod)", tier)
 	}
+}
+
+// catalogPropertyPages generates the list of Property: pages from the catalog.
+// Returns an empty list when no catalog is loaded (backwards-compatible fallback).
+func catalogPropertyPages(c *catalog.Catalog) []string {
+	if c == nil || len(c.Properties) == 0 {
+		return []string{}
+	}
+	pages := make([]string, 0, len(c.Properties))
+	for _, prop := range c.Properties {
+		pages = append(pages, "Property:"+strings.ReplaceAll(prop.Name, " ", "_"))
+	}
+	return pages
 }
 
 // ValidateSeed validates that a SQL dump contains all required pages.

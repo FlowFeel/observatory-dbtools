@@ -133,7 +133,7 @@ func cmdCurate(args []string) {
 	verifyFlag := fs.Bool("verify", false, "Verify target database satisfies tier plan")
 	fs.Parse(args)
 
-	plan, err := curate.NewPlan(*tier)
+	plan, err := curate.NewPlan(*tier, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "curate: plan error: %v\n", err)
 		os.Exit(1)
@@ -174,19 +174,19 @@ func cmdDrift(args []string) {
 	defer db.Close()
 
 	if *checkFlag {
-		rpt, err := drift.Check(db)
+		rpt, err := drift.Check(db, drift.DefaultRegistry())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "drift: check error: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Println(rpt.String())
-		if rpt.HasDrift() {
+		if rpt.HasDrift {
 			os.Exit(2)
 		}
 	}
 
 	if *fixFlag {
-		rows, err := drift.Fix(db)
+		rows, err := drift.Fix(db, drift.DefaultRegistry())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "drift: fix error: %v\n", err)
 			os.Exit(1)

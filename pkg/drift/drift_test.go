@@ -133,7 +133,7 @@ func TestDrift_ZeroOnCleanState(t *testing.T) {
 		}
 	}
 
-	report, err := drift.Check(db)
+	report, err := drift.Check(db, drift.DefaultRegistry())
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -145,10 +145,10 @@ func TestDrift_ZeroOnCleanState(t *testing.T) {
 
 	golden := readGolden(t, "drift_zero.json")
 	// Compare structural equality, not exact counts (counts depend on seed data)
-	if report.HasDrift() {
+	if report.HasDrift {
 		t.Errorf("expected zero drift, got: %s", report.String())
 	}
-	if golden.MissingInDI != 0 {
+	if len(golden.Targets) == 0 || golden.Targets[0].MissingInDI != 0 {
 		t.Errorf("golden should have zero drift")
 	}
 }
@@ -177,15 +177,15 @@ func TestDrift_DetectsAndFixes(t *testing.T) {
 	}
 
 	// Check: should detect drift
-	report, err := drift.Check(db)
+	report, err := drift.Check(db, drift.DefaultRegistry())
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	if !report.HasDrift() {
+	if !report.HasDrift {
 		t.Fatal("expected drift, got none")
 	}
-	if report.MissingInDI != 3 {
-		t.Errorf("expected 3 missing, got %d", report.MissingInDI)
+	if report.Targets[0].MissingInDI != 3 {
+		t.Errorf("expected 3 missing, got %d", report.Targets[0].MissingInDI)
 	}
 
 	if *update {
@@ -193,7 +193,7 @@ func TestDrift_DetectsAndFixes(t *testing.T) {
 	}
 
 	// Fix
-	fixed, err := drift.Fix(db)
+	fixed, err := drift.Fix(db, drift.DefaultRegistry())
 	if err != nil {
 		t.Fatalf("Fix failed: %v", err)
 	}
@@ -202,11 +202,11 @@ func TestDrift_DetectsAndFixes(t *testing.T) {
 	}
 
 	// Verify: zero drift after fix
-	after, err := drift.Check(db)
+	after, err := drift.Check(db, drift.DefaultRegistry())
 	if err != nil {
 		t.Fatalf("Check after fix failed: %v", err)
 	}
-	if after.HasDrift() {
+	if after.HasDrift {
 		t.Errorf("expected zero drift after fix, got: %s", after.String())
 	}
 
@@ -216,7 +216,11 @@ func TestDrift_DetectsAndFixes(t *testing.T) {
 
 	if !*update {
 		golden := readGolden(t, "drift_detected.json")
-		if diff := cmp.Diff(golden.MissingInDI, report.MissingInDI); diff != "" {
+		var goldenMissing int
+		if len(golden.Targets) > 0 {
+			goldenMissing = golden.Targets[0].MissingInDI
+		}
+		if diff := cmp.Diff(goldenMissing, report.Targets[0].MissingInDI); diff != "" {
 			t.Errorf("drift count mismatch (-golden +actual):\n%s", diff)
 		}
 	}

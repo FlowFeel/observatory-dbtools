@@ -5,6 +5,10 @@ on:
     branches: [main, "feature/*", "refactor/*"]
   pull_request:
     branches: [main]
+  # Cross-repo contract flow: the magazine emits catalog.json; when it does,
+  # we re-verify the committed fixture matches the live export.
+  repository_dispatch:
+    types: [catalog-exported]
 
 permissions:
   contents: read
@@ -55,7 +59,7 @@ jobs:
           cache: true
 
       - name: Run unit tests
-        run: go test -v ./pkg/compare ./pkg/snapshot ./pkg/report
+        run: go test -v ./pkg/compare ./pkg/snapshot ./pkg/report ./pkg/catalog ./pkg/audit ./pkg/curate
 
   # ================================================================
   # Layer 2 & 3: Testcontainers Integration & BDD Compliance Suite
@@ -136,3 +140,38 @@ jobs:
             git diff go.mod go.sum
             exit 1
           fi
+
+  # ================================================================
+  # Cross-repo contract freshness: on magazine catalog-exported event,
+  # verify the committed fixture matches the live catalog.json export.
+  # ================================================================
+  catalog-freshness:
+    name: "Catalog Contract Freshness"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: github.event_name == 'repository_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch live catalog.json from magazine artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.CATALOG_FETCH_TOKEN }}
+        run: |
+          run_id=$(curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/janfrel/observatory-magazine-v2/actions/artifacts?name=catalog-json" \
+            | python3 -c "import sys,json; a=json.load(sys.stdin)['artifacts']; print(a[0]['id'] if a else '')")
+          if [ -z "$run_id" ]; then
+            echo "::warning::No catalog-json artifact found on janfrel/observatory-magazine-v2"
+            exit 0
+          fi
+          curl -sL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/janfrel/observatory-magazine-v2/actions/artifacts/${run_id}/zip" \
+            -o catalog.zip
+          unzip -o catalog.zip -d /tmp/live-catalog
+          if ! diff -q /tmp/live-catalog/catalog.json pkg/catalog/testdata/catalog_v1.json; then
+            echo "::error::Committed fixture is stale. Regenerate:"
+            echo "  cd janfrel/observatory-magazine-v2 && php bin/export-catalog.php > ../observatory-dbtools/pkg/catalog/testdata/catalog_v1.json"
+            diff /tmp/live-catalog/catalog.json pkg/catalog/testdata/catalog_v1.json
+            exit 1
+          fi
+          echo "✓ Catalog fixture is fresh"

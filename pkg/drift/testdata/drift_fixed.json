@@ -1,6 +1,17 @@
 {
-  "fpt_count": 10,
-  "di_count": 10,
-  "missing_in_di": 0,
-  "description": "All _MDAT entries in FPT are also in DI"
+  "targets": [
+    {
+      "target": {
+        "property_name": "_MDAT",
+        "fpt_table": "smw_fpt_mdat",
+        "di_table": "smw_di_time",
+        "pid": 29
+      },
+      "fpt_count": 10,
+      "di_count": 10,
+      "missing_in_di": 0
+    }
+  ],
+  "has_drift": false,
+  "description": "all targets clean"
 }
